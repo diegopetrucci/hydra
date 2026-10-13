@@ -101,11 +101,18 @@ afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn().catch(() => {});
 });
 
+/** Lets tests drive a connector into failure without a real refresh error. */
+class InspectableConnectorManager extends ConnectorManager {
+  failEntry(id: string, e: Error): void {
+    this.failConnect(this.entries.get(id)!, e);
+  }
+}
+
 interface Fixture {
   core: DaemonCore;
   harness: Harness;
   registry: Registry;
-  manager: ConnectorManager;
+  manager: InspectableConnectorManager;
   servers: Record<string, FakeServer>;
   faux: FauxProviderHandle;
   events: ProtocolEvent[];
@@ -153,7 +160,7 @@ async function makeFixture(connected: Array<"sentry" | "notion"> = ["sentry"]): 
     });
   }
   const events: ProtocolEvent[] = [];
-  const manager = new ConnectorManager(store, (e) => events.push(e), {
+  const manager = new InspectableConnectorManager(store, (e) => events.push(e), {
     createTransport: (def) => {
       const { client, server } = createInMemoryTransportPair();
       servers[def.id]!.attach(server);
@@ -201,7 +208,7 @@ async function makeFixture(connected: Array<"sentry" | "notion"> = ["sentry"]): 
     instructions: "Help.",
     model: "faux/faux-1",
   });
-  const botId = (res as unknown as { result: { id: string } }).result.id;
+  const botId = (res as { result: { id: string } }).result.id;
   return { core, harness, registry, manager, servers, faux, events, botId, requests };
 }
 
@@ -418,11 +425,7 @@ describe("connector tools", () => {
     await waitFor(() => toolNames().length === 2);
 
     // A refused refresh moves the connector to needs_sign_in.
-    const entry = (f.manager as unknown as { entries: Map<string, unknown> }).entries.get("sentry");
-    (f.manager as unknown as { failConnect(entry: unknown, e: unknown): void }).failConnect(
-      entry,
-      new OAuthError("invalid_grant", "refused"),
-    );
+    f.manager.failEntry("sentry", new OAuthError("invalid_grant", "refused"));
     expect(toolNames()).toEqual([]);
     expect(f.manager.list().find((c) => c.id === "sentry")!.status).toBe("needs_sign_in");
   });
@@ -433,23 +436,19 @@ describe("connector tools", () => {
       .snapshot()
       .tools()
       .find((t) => t.tool.name === "mcp__sentry__search_issues")!.tool;
-    const entry = (f.manager as unknown as { entries: Map<string, unknown> }).entries.get("sentry");
-    (f.manager as unknown as { failConnect(entry: unknown, e: unknown): void }).failConnect(
-      entry,
-      new OAuthError("invalid_grant", "refused"),
-    );
+    f.manager.failEntry("sentry", new OAuthError("invalid_grant", "refused"));
     // A turn that already holds the tool: a transcript with one human message.
+    const tx = {
+      scanEntries: async () => ({
+        items: [
+          { kind: "pi.user", model: [{ role: "user", content: "look it up", timestamp: 0 }] },
+        ],
+        next: undefined,
+      }),
+    };
     const api = {
       conversationId: 1,
-      commit: async (fn: (tx: unknown) => unknown) =>
-        fn({
-          scanEntries: async () => ({
-            items: [
-              { kind: "pi.user", model: [{ role: "user", content: "look it up", timestamp: 0 }] },
-            ],
-            next: undefined,
-          }),
-        }),
+      commit: async <T>(fn: (transaction: typeof tx) => T): Promise<T> => fn(tx),
     };
     const res = await tool.execute({} as never, api as never, ctx);
     expect(res.isError).toBe(true);
@@ -529,7 +528,7 @@ describe("connectors prompt section", () => {
 
   it("is installed once and not reinstalled when the connected set is unchanged", async () => {
     const f = await makeFixture(["sentry"]);
-    const ext = (): unknown =>
+    const ext = () =>
       f.registry
         .snapshot()
         .installed()

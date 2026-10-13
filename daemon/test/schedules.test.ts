@@ -504,7 +504,7 @@ describe("(d) cancel_schedule", () => {
 
       // Wait for the task to reach terminal state (abort handler has run).
       // This is the reliable indicator: terminal = no more check-ins possible.
-      const taskId = Number(scheduleId) as unknown as TaskId<void>;
+      const taskId = Number(scheduleId) as TaskId<void>;
       await waitFor(async () => {
         const task = await harness.getTask(taskId, ctx);
         return task?.state.status === "terminal";
@@ -699,9 +699,7 @@ describe("(f) validation rejections", () => {
     const docBefore = await readSchedulesDoc(harness, botId);
     const realId = Object.keys(docBefore?.schedules ?? {})[0];
     expect(realId).toBeDefined();
-    const realTaskId = Number(
-      realId,
-    ) as unknown as import("@earendil-works/pi-durable").TaskId<void>;
+    const realTaskId = Number(realId) as import("@earendil-works/pi-durable").TaskId<void>;
 
     // Now try to cancel a non-existent id
     const cancelResponder: FauxResponseFactory = (context: TranscriptContext) => {
@@ -762,9 +760,7 @@ describe("(f) validation rejections", () => {
     const docA = await readSchedulesDoc(harness, botA);
     const schedIdA = Object.keys(docA?.schedules ?? {})[0];
     expect(schedIdA).toBeDefined();
-    const taskIdA = Number(
-      schedIdA,
-    ) as unknown as import("@earendil-works/pi-durable").TaskId<void>;
+    const taskIdA = Number(schedIdA) as import("@earendil-works/pi-durable").TaskId<void>;
 
     // Bot B: try to cancel bot A's schedule
     const botB = await createBot(core, "Bot B");
@@ -1253,7 +1249,7 @@ describe("cancel_schedule id type coercion", () => {
     });
     await waitFor(() => completedCount(events, botId) >= countBefore + 1, 8_000);
 
-    const taskId = numId as unknown as TaskId<void>;
+    const taskId = numId as TaskId<void>;
     await waitFor(async () => {
       const task = await harness.getTask(taskId, ctx);
       return task?.state.status === "terminal";
@@ -1292,7 +1288,7 @@ describe("cancel_schedule id type coercion", () => {
     });
     await waitFor(() => completedCount(events, botId) >= countBefore + 1, 8_000);
 
-    const taskId = Number(scheduleId) as unknown as TaskId<void>;
+    const taskId = Number(scheduleId) as TaskId<void>;
     await waitFor(async () => {
       const task = await harness.getTask(taskId, ctx);
       return task?.state.status === "terminal";

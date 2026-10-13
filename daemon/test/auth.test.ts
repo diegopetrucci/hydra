@@ -700,7 +700,7 @@ describe("item 3 – auth.failed sanitisation", () => {
 
 //
 
-describe("item 4 \ login session: silence after auth.cancel", () => {
+describe("item 4  login session: silence after auth.cancel", () => {
   it("a promise that resolves after cancel emits nothing beyond the cancel's auth.failed", async () => {
     const store = new InMemoryCredentialStore();
     const events: ProtocolEvent[] = [];
@@ -790,7 +790,7 @@ describe("item 4 \ login session: silence after auth.cancel", () => {
 
 //
 
-describe("re-review (c) \ notify and prompt emit nothing for a cancelled/removed session", () => {
+describe("re-review (c)  notify and prompt emit nothing for a cancelled/removed session", () => {
   it("notify does not emit any event after the session has been cancelled", async () => {
     const events: ProtocolEvent[] = [];
     let capturedNotify: ((event: import("@earendil-works/pi-ai").AuthEvent) => void) | undefined;
@@ -870,7 +870,7 @@ describe("re-review (c) \ notify and prompt emit nothing for a cancelled/removed
 
 // ─── nb-r5wv: shutdown cancels in-flight logins (unit tests) ─────────────────
 
-describe("nb-r5wv \ AuthManager.cancelAll cancels active sessions silently", () => {
+describe("nb-r5wv  AuthManager.cancelAll cancels active sessions silently", () => {
   it("cancelAll aborts the session signal so waiters see abort", async () => {
     const events: ProtocolEvent[] = [];
     let capturedSignal: AbortSignal | undefined;

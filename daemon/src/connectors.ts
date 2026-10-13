@@ -156,7 +156,7 @@ function isTransient(e: unknown): boolean {
 }
 
 export class ConnectorManager {
-  private readonly entries = new Map<string, Entry>();
+  protected readonly entries = new Map<string, Entry>();
   private readonly deps: ConnectorDeps;
   private activeSignIn: ActiveSignIn | undefined;
   private signInStarting = false;
@@ -457,7 +457,7 @@ export class ConnectorManager {
   }
 
   /** Auth failures need the user; anything else stays "error" and is retried with backoff. */
-  private failConnect(entry: Entry, e: unknown): void {
+  protected failConnect(entry: Entry, e: unknown): void {
     if (isAuthFailure(e)) {
       clearTimeout(entry.retryTimer);
       entry.retryTimer = undefined;

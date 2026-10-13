@@ -146,10 +146,17 @@ class FlakyTransport implements McpTransport {
   }
 }
 
+/** Exposes the manager's protected connector entries to assertions. */
+class InspectableConnectorManager extends ConnectorManager {
+  entry(id: string) {
+    return this.entries.get(id)!;
+  }
+}
+
 interface Harnessed {
   dir: string;
   store: FileConnectorStore;
-  manager: ConnectorManager;
+  manager: InspectableConnectorManager;
   events: ProtocolEvent[];
   server: FakeServer;
   failures: Error[];
@@ -222,7 +229,7 @@ describe("connectors", () => {
       };
       return flaky;
     };
-    const manager = new ConnectorManager(store, (e) => events.push(e), {
+    const manager = new InspectableConnectorManager(store, (e) => events.push(e), {
       createTransport,
       authorize: async (provider, o) => {
         // Stand-in for the token exchange; stores tokens like the real flow.
@@ -272,9 +279,7 @@ describe("connectors", () => {
   }
 
   function internals(): { client: unknown; opening: unknown } {
-    return (
-      h.manager as unknown as { entries: Map<string, { client: unknown; opening: unknown }> }
-    ).entries.get("sentry")!;
+    return h.manager.entry("sentry");
   }
 
   // ─── Store ────────────────────────────────────────────────────────────────
@@ -587,15 +592,12 @@ describe("connectors", () => {
     await seedSignedIn();
     await h.manager.start();
     await h.manager.settled();
-    const entries = (
-      h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }
-    ).entries;
-    await entries.get("sentry")!.client!.close();
+    await h.manager.entry("sentry").client!.close();
     h.failStarts = 2;
     let before = h.transports;
     await expect(h.manager.callTool("sentry", "ping", {})).resolves.toBeDefined();
     expect(h.transports - before).toBe(3); // 2 failed opens + 1 good
-    await entries.get("sentry")!.client!.close();
+    await h.manager.entry("sentry").client!.close();
     h.offline = true;
     before = h.transports;
     await expect(h.manager.callTool("sentry", "ping", {})).rejects.toBeInstanceOf(TypeError);
@@ -615,11 +617,7 @@ describe("connectors", () => {
     );
     await waitFor(() => h.server.calls.length === 1);
     // The connection drops after the mutation ran but before the response arrived.
-    await (
-      h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }
-    ).entries
-      .get("sentry")!
-      .client!.close();
+    await h.manager.entry("sentry").client!.close();
     expect(await outcome).not.toBe("resolved");
     await flush();
     expect(h.server.calls).toEqual(["ping"]);
@@ -654,11 +652,7 @@ describe("connectors", () => {
     await h.manager.settled();
     const before = h.transports;
     h.offline = true; // reopening fails with a transient TypeError, then sleeps
-    await (
-      h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }
-    ).entries
-      .get("sentry")!
-      .client!.close();
+    await h.manager.entry("sentry").client!.close();
     const call = h.manager.callTool("sentry", "ping", {});
     const outcome = call.then(
       () => "resolved",
@@ -695,11 +689,7 @@ describe("connectors", () => {
     gate.resolve();
     await out;
     expect(h.transports).toBe(before);
-    expect(
-      (h.manager as unknown as { entries: Map<string, { client?: unknown }> }).entries.get(
-        "sentry",
-      )!.client,
-    ).toBeUndefined();
+    expect(h.manager.entry("sentry").client).toBeUndefined();
   });
 
   it("a sign-in started during sign-out cleanup waits for it; new tokens and client survive", async () => {
@@ -730,9 +720,7 @@ describe("connectors", () => {
     const saved = JSON.parse(await readFile(h.store.path, "utf-8"));
     expect(saved.connectors.sentry.tokens.access_token).toBe("tok");
     expect(h.manager.listTools("sentry").map((t) => t.name)).toEqual(["ping"]);
-    const entry = (
-      h.manager as unknown as { entries: Map<string, { client?: { connectionState: string } }> }
-    ).entries.get("sentry")!;
+    const entry = h.manager.entry("sentry");
     expect(entry.client?.connectionState).toBe("connected");
   });
 

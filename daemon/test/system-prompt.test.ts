@@ -57,9 +57,7 @@ async function makeCore(): Promise<{
   const fakeFetch = (): never => {
     throw new Error("Unexpected network call in system-prompt tests");
   };
-  const { extension: webExt } = buildWebToolsExtensionForTest(
-    fakeFetch as unknown as Parameters<typeof buildWebToolsExtensionForTest>[0],
-  );
+  const { extension: webExt } = buildWebToolsExtensionForTest(fakeFetch);
 
   const registry = createRegistry();
   // hydraExtension MUST be installed before webToolsExtension.

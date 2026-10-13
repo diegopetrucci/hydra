@@ -507,7 +507,7 @@ describe("single-instance lock", () => {
 
 //
 
-describe("item 1 \ async handler errors preserve the request id", () => {
+describe("item 1  async handler errors preserve the request id", () => {
   it("error from a rejecting async handler carries the request id, not null", async () => {
     // Build a DaemonCore with a credential store whose modify() always throws.
     const { models } = await createTestModels();
@@ -551,7 +551,7 @@ describe("item 1 \ async handler errors preserve the request id", () => {
 
 //
 
-describe("item 5 \ credential store global serialisation across providers", () => {
+describe("item 5  credential store global serialisation across providers", () => {
   let tmpDir2: string;
 
   beforeEach(async () => {
@@ -595,7 +595,7 @@ describe("item 5 \ credential store global serialisation across providers", () =
 
 //
 
-describe("item 7 \ large response survives stdin-EOF flush", () => {
+describe("item 7  large response survives stdin-EOF flush", () => {
   it("bots.list result is fully returned for a large bot list (> 64 KB response)", async () => {
     // This test covers the DaemonCore side of large responses.
     // The main.ts fix (process.exitCode vs process.exit) ensures stdout
@@ -634,7 +634,7 @@ describe("item 7 \ large response survives stdin-EOF flush", () => {
 
 // ─── re-review (a): transport-fallback and fatal-handler error sanitization ───
 
-describe("re-review (a) \ transport fallback and fatal handler sanitize errors", () => {
+describe("re-review (a)  transport fallback and fatal handler sanitize errors", () => {
   it("describeError never includes the raw error message (sentinel-secret test)", () => {
     const SENTINEL = "SENTINEL_SECRET_sk_live_rawmessage_abcdef";
     const err = new Error(`OAuth token refresh failed: secret=${SENTINEL}&body=Bearer+${SENTINEL}`);
@@ -711,7 +711,7 @@ describe("re-review (a) \ transport fallback and fatal handler sanitize errors",
 
 // ─── re-review (d): lock temp file in same directory as daemon.pid ────────────
 
-describe("re-review (d) \ lock temp file co-located with daemon.pid", () => {
+describe("re-review (d)  lock temp file co-located with daemon.pid", () => {
   let tmpDir: string;
 
   beforeEach(async () => {

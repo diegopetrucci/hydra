@@ -7,7 +7,7 @@
  * Uses:
  *  – pi-ai faux provider  (no real model calls)
  *  – buildWebToolsExtensionForTest  (web-tools adapter with stub fetch)
- *  – node:dns/promises mocked      (prevents real DNS lookups during SSRF check)
+ *  – IP-literal URL (https://1.1.1.1/) so the SSRF validator skips DNS entirely
  *  – DaemonCore + BotWatcher       (full protocol event pipeline)
  *
  * Asserts tool activity events and the final message.completed event.
@@ -27,18 +27,6 @@ import { buildWebToolsExtensionForTest } from "../src/web-tools.js";
 import type { ProtocolEvent } from "../src/protocol.js";
 
 const ctx = BACKGROUND_CONTEXT;
-
-// ─── DNS stub ────────────────────────────────────────────────────────────────
-//
-// The web-tools SSRF protection (ssrf-protection.ts) resolves hostnames via
-// node:dns/promises before the custom fetch implementation is called.  We mock
-// it here so the test never touches the network.  The mock returns a public,
-// non-blocked IP for any hostname (bypassing real DNS while still satisfying
-// the SSRF validator's IP-range checks).
-
-vi.mock("node:dns/promises", () => ({
-  lookup: vi.fn().mockResolvedValue([{ address: "1.1.1.1", family: 4 }]),
-}));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -78,41 +66,20 @@ describe("item 8 – faux tool call through real harness and web-tools adapter",
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("routes web_search tool call through the harness; asserts tool activity events and message.completed", async () => {
+  it("routes fetch_content tool call through the harness; asserts tool activity events and message.completed", async () => {
     // ── Stub fetch ──────────────────────────────────────────────────────────
-    // The web-tools adapter passes our fakeFetch to fetchRemoteUrl, which calls
-    // it after the (mocked) DNS resolution.  We return a valid Exa MCP JSON-RPC
-    // response so web_search succeeds without hitting the real network.
+    // The web-tools adapter passes our fakeFetch to fetchRemoteUrl.  The tool
+    // call targets a public IP literal, so the SSRF validator needs no DNS
+    // lookup and the stub serves the page without touching the network.
     const fakeFetch = vi.fn(async (_url: string | URL | Request): Promise<Response> => {
-      // Exa MCP JSON-RPC response with one search result.
-      const mcpBody = JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        result: {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify([
-                {
-                  url: "https://example.com/typescript-async",
-                  title: "TypeScript Async Guide",
-                  text: "Comprehensive guide to async/await in TypeScript.",
-                },
-              ]),
-            },
-          ],
-        },
-      });
-      return new Response(mcpBody, {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return new Response(
+        "<html><head><title>Routing Page</title></head><body><main><h1>Routing Page</h1><p>TypeScript async/await content served by the stub fetch for the routing test.</p></main></body></html>",
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
     });
 
     // ── Build the web-tools extension with the stubbed fetch ──────────────
-    const { extension: webExt, resetBudget } = buildWebToolsExtensionForTest(
-      fakeFetch as unknown as Parameters<typeof buildWebToolsExtensionForTest>[0],
-    );
+    const { extension: webExt, resetBudget } = buildWebToolsExtensionForTest(fakeFetch);
 
     // ── Create the harness with the test extension ────────────────────────
     const registry = createRegistry();
@@ -150,7 +117,7 @@ describe("item 8 – faux tool call through real harness and web-tools adapter",
     // Response 1: tool call (web_search).
     // Response 2: text reply after the tool result.
     faux.setResponses([
-      fauxAssistantMessage(fauxToolCall("web_search", { query: "TypeScript async patterns" }), {
+      fauxAssistantMessage(fauxToolCall("fetch_content", { url: "https://1.1.1.1/" }), {
         stopReason: "toolUse",
       }),
       fauxAssistantMessage(fauxText("TypeScript async/await is great.")),
@@ -198,11 +165,11 @@ describe("item 8 – faux tool call through real harness and web-tools adapter",
     );
     expect(toolActivityEvents.length).toBeGreaterThan(0);
 
-    const webSearchActivity = toolActivityEvents.find(
-      (e) => "tool" in e && (e as { tool: string }).tool === "web_search",
+    const fetchActivity = toolActivityEvents.find(
+      (e) => "tool" in e && (e as { tool: string }).tool === "fetch_content",
     );
-    expect(webSearchActivity).toBeDefined();
-    expect((webSearchActivity as { label: string }).label).toBe("Searching the web");
+    expect(fetchActivity).toBeDefined();
+    expect((fetchActivity as { label: string }).label).toBe("Reading 1.1.1.1");
 
     // ── Assert final message (text reply, not tool call message) ──────────
     const completed = events.find(

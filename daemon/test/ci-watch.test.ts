@@ -256,7 +256,7 @@ async function makeFixture(
     instructions: "",
     model: "faux/faux-1",
   });
-  const botId = (res as unknown as { result: { id: string } }).result.id;
+  const botId = (res as { result: { id: string } }).result.id;
   return { core, events, faux, harness, gh, wakes, calls, botId };
 }
 
@@ -361,7 +361,7 @@ describe("watch_ci creation and baseline", () => {
 
     // (i) history hides the wake.
     const hist = await f.core.handleRequest({ id: "h", type: "bots.history", botId: f.botId });
-    const msgs = (hist as unknown as { result: Array<{ role: string; text: string }> }).result;
+    const msgs = (hist as { result: Array<{ role: string; text: string }> }).result;
     expect(msgs.some((m) => m.text.startsWith(CI_MARKER))).toBe(false);
     expect(msgs.some((m) => m.role === "user")).toBe(true);
   }, 90_000);

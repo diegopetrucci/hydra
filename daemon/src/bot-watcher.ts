@@ -222,7 +222,7 @@ export class BotWatcher {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
-  private async handleEvent(ev: AgentEvent, botId: string): Promise<void> {
+  protected async handleEvent(ev: AgentEvent, botId: string): Promise<void> {
     switch (ev.type) {
       case "run_start": {
         // Reset the web-tools per-reply request budget before the run starts.

@@ -424,10 +424,10 @@ describe("NO_REPLY sentinel", () => {
     for (const e of events) {
       if (!("botId" in e) || e.botId !== botId) continue;
       if (e.event === "message.delta") {
-        expect((e as unknown as { text: string }).text).not.toBe("");
+        expect((e as { text: string }).text).not.toBe("");
       }
       if (e.event === "message.completed") {
-        expect((e as unknown as { message: { text: string } }).message.text.trim()).not.toBe("");
+        expect((e as { message: { text: string } }).message.text.trim()).not.toBe("");
       }
     }
   });
