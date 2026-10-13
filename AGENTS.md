@@ -121,6 +121,7 @@ cd HydraPackage && swift test
 - **Connector not connected**: With Swarmia signed out, ask a bot a Swarmia question; it replies briefly that it isn't connected and points to ⋯ → Connectors….
 - **Schedule persistence**: Ask a bot to check in every minute, then quit and relaunch the app. The schedule should survive and the check-in should still fire after the daemon restarts.
 - **Sidebar row hit area**: Click anywhere in a sidebar row, including the empty space after the name or time; that bot is selected.
+- **New bot tip**: Sign in with no bots; a tip points at the + button and the detail view says "No Bots Yet" without mentioning the sidebar. Clicking + (or closing the tip) dismisses it for good. To see it again, launch with `-com.apple.TipKit.ResetDatastore 1`.
 
 ## Web tools configuration
 

@@ -3,6 +3,7 @@ import ComposableArchitecture
 import DaemonClient
 import Dependencies
 import SwiftUI
+import TipKit
 
 // MARK: - AppDelegate
 
@@ -77,6 +78,13 @@ struct HydraApp: App {
                 $0.openURL = OpenURLEffect { url in
                     await MainActor.run { NSWorkspace.shared.open(url) }
                 }
+            }
+        }
+        if !isTesting {
+            do {
+                try Tips.configure()
+            } catch {
+                FileHandle.standardError.write(Data("Tips.configure failed: \(error)\n".utf8))
             }
         }
         store = isTesting ? nil : Store(initialState: AppFeature.State()) {

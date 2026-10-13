@@ -2,6 +2,7 @@ import ComposableArchitecture
 import DaemonClient
 import IdentifiedCollections
 import SwiftUI
+import TipKit
 
 // MARK: - AppFeature
 
@@ -23,6 +24,10 @@ public struct AppFeature {
         /// True once `appLaunched` has been sent; makes the action idempotent so
         /// reopening the window (or a second send) does not reconnect the daemon.
         public var isLaunched: Bool = false
+        /// True while a provider credential is believed to exist; drives the new-bot tip.
+        public var isSignedIn: Bool = false
+        /// True once the first bot list has arrived, so an empty `bots` is trustworthy.
+        public var hasLoadedBots: Bool = false
 
         // Child features
         public var chat: ChatFeature.State?
@@ -47,6 +52,8 @@ public struct AppFeature {
             isAppActive: Bool = true,
             botActivities: [String: BotActivity] = [:],
             isLaunched: Bool = false,
+            isSignedIn: Bool = false,
+            hasLoadedBots: Bool = false,
             chat: ChatFeature.State? = nil,
             newBot: NewBotFeature.State? = nil,
             login: LoginFeature.State? = nil,
@@ -60,10 +67,17 @@ public struct AppFeature {
             self.isAppActive = isAppActive
             self.botActivities = botActivities
             self.isLaunched = isLaunched
+            self.isSignedIn = isSignedIn
+            self.hasLoadedBots = hasLoadedBots
             self.chat = chat
             self.newBot = newBot
             self.login = login
             self.connectors = connectors
+        }
+
+        /// Whether the "Create a bot" tip should show: signed in, bot list loaded, no bots.
+        public var isNewBotTipEligible: Bool {
+            isSignedIn && hasLoadedBots && bots.isEmpty
         }
     }
 
@@ -204,6 +218,7 @@ public struct AppFeature {
 
         case .botsLoaded(let bots):
             state.bots = IdentifiedArray(uniqueElements: bots)
+            state.hasLoadedBots = true
             return .none
 
         case .botsLoadFailed(let message):
@@ -212,6 +227,7 @@ public struct AppFeature {
 
         case .authStatusReceived(let status):
             let hasCredential = status.providers.contains { $0.type != nil }
+            state.isSignedIn = hasCredential
             if !hasCredential {
                 state.login = LoginFeature.State()
             }
@@ -251,6 +267,7 @@ public struct AppFeature {
             return .none
 
         case .signOutMenuItemTapped:
+            state.isSignedIn = false
             return .run { [daemonClient] _ in
                 _ = try? await daemonClient.authLogout("anthropic")
             }
@@ -271,6 +288,7 @@ public struct AppFeature {
         // MARK: Child: chat delegate
 
         case .chat(.delegate(.authRequired)):
+            state.isSignedIn = false
             state.login = LoginFeature.State()
             return .none
 
@@ -284,6 +302,7 @@ public struct AppFeature {
         // MARK: Child: login delegate
 
         case .login(.presented(.delegate(.authenticated))):
+            state.isSignedIn = true
             state.login = nil
             return .none
 
@@ -362,6 +381,7 @@ public struct AppFeature {
                 effects.append(.send(.chat(.botErrorReceived(code: code, message: message))))
             }
             if code == "auth_required" {
+                state.isSignedIn = false
                 state.login = LoginFeature.State()
             }
             return effects.isEmpty ? .none : .merge(effects)
@@ -493,6 +513,7 @@ public struct AppFeature {
 
 public struct AppFeatureView: View {
     @Bindable var store: StoreOf<AppFeature>
+    private let newBotTip = NewBotTip()
 
     public init(store: StoreOf<AppFeature>) {
         self.store = store
@@ -546,6 +567,12 @@ public struct AppFeatureView: View {
         } detail: {
             if let chatStore = store.scope(state: \.chat, action: \.chat) {
                 ChatFeatureView(store: chatStore)
+            } else if store.bots.isEmpty {
+                ContentUnavailableView(
+                    "No Bots Yet",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: Text("Create a bot to get started.")
+                )
             } else {
                 ContentUnavailableView(
                     "Select a Bot",
@@ -590,13 +617,18 @@ public struct AppFeatureView: View {
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 420)
         .navigationTitle("Bots")
+        .onChange(of: store.isNewBotTipEligible, initial: true) { _, isEligible in
+            NewBotTip.isEligible = isEligible
+        }
         .toolbar {
             ToolbarItem {
                 Button {
+                    newBotTip.invalidate(reason: .actionPerformed)
                     store.send(.newBotButtonTapped)
                 } label: {
                     Image(systemName: "plus")
                 }
+                .popoverTip(newBotTip, arrowEdge: .top)
             }
             ToolbarItem {
                 Menu {
@@ -682,6 +714,20 @@ private struct BotRowView: View {
                     ),
                 ],
                 daemonStatus: .connected
+            )
+        ) {
+            AppFeature()
+        }
+    )
+}
+
+#Preview("Connected — no bots") {
+    AppFeatureView(
+        store: Store(
+            initialState: AppFeature.State(
+                daemonStatus: .connected,
+                isSignedIn: true,
+                hasLoadedBots: true
             )
         ) {
             AppFeature()

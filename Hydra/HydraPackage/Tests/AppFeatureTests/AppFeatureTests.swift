@@ -68,12 +68,15 @@ struct AppFeatureTests {
         // Release auth first — credentials present, no login shown.
         authCont.yield(stubAuthStatus)
         authCont.finish()
-        await store.receive(\.authStatusReceived)
+        await store.receive(\.authStatusReceived) { $0.isSignedIn = true }
 
         // Release bots.
         botsCont.yield(stubBots)
         botsCont.finish()
-        await store.receive(\.botsLoaded) { $0.bots = IdentifiedArray(uniqueElements: stubBots) }
+        await store.receive(\.botsLoaded) {
+            $0.bots = IdentifiedArray(uniqueElements: stubBots)
+            $0.hasLoadedBots = true
+        }
 
         // Release hello.
         helloCont.yield(stubHello)
@@ -166,12 +169,12 @@ struct AppFeatureTests {
         // Release auth first.
         authCont.yield(stubAuthStatus)
         authCont.finish()
-        await store.receive(\.authStatusReceived)
+        await store.receive(\.authStatusReceived) { $0.isSignedIn = true }
 
         // Release bots.
         botsCont.yield([])
         botsCont.finish()
-        await store.receive(\.botsLoaded)  // [] bots already empty, no state change
+        await store.receive(\.botsLoaded) { $0.hasLoadedBots = true }
 
         // Release hello error last, in controlled order.
         helloErrCont.yield(DaemonError(code: "internal_error", message: "Oops"))
@@ -207,7 +210,7 @@ struct AppFeatureTests {
         // Release auth first.
         authCont.yield(stubAuthStatus)
         authCont.finish()
-        await store.receive(\.authStatusReceived)
+        await store.receive(\.authStatusReceived) { $0.isSignedIn = true }
 
         // Release bots error.
         botsErrCont.yield(DaemonError(code: "internal_error", message: "DB error"))
@@ -311,7 +314,7 @@ struct AppFeatureTests {
         // Release bots.
         botsCont.yield(stubBots)
         botsCont.finish()
-        await store.receive(\.botsLoaded)  // initial state already has stubBots, no change
+        await store.receive(\.botsLoaded) { $0.hasLoadedBots = true }
         await store.finish()
     }
 
@@ -463,6 +466,124 @@ struct AppFeatureTests {
         }
     }
 
+    // MARK: - New bot tip eligibility
+
+    @Test("tip eligible after signed-in launch with no bots")
+    func tipEligibleAfterSignedInLaunchWithNoBots() async {
+        let store = TestStore(initialState: AppFeature.State(daemonStatus: .connected)) {
+            AppFeature()
+        }
+
+        await store.send(.authStatusReceived(stubAuthStatus)) { $0.isSignedIn = true }
+        #expect(!store.state.isNewBotTipEligible)  // bot list not loaded yet
+        await store.send(.botsLoaded([])) { $0.hasLoadedBots = true }
+        #expect(store.state.isNewBotTipEligible)
+    }
+
+    @Test("tip not eligible when bots exist")
+    func tipNotEligibleWithBots() async {
+        let store = TestStore(initialState: AppFeature.State(daemonStatus: .connected)) {
+            AppFeature()
+        }
+
+        await store.send(.authStatusReceived(stubAuthStatus)) { $0.isSignedIn = true }
+        await store.send(.botsLoaded(stubBots)) {
+            $0.bots = IdentifiedArray(uniqueElements: stubBots)
+            $0.hasLoadedBots = true
+        }
+        #expect(!store.state.isNewBotTipEligible)
+    }
+
+    @Test("tip becomes eligible after login authenticates")
+    func tipEligibleAfterLoginAuthenticated() async {
+        let store = TestStore(
+            initialState: AppFeature.State(
+                daemonStatus: .connected,
+                hasLoadedBots: true,
+                login: LoginFeature.State()
+            )
+        ) {
+            AppFeature()
+        }
+
+        #expect(!store.state.isNewBotTipEligible)
+        await store.send(.login(.presented(.delegate(.authenticated)))) {
+            $0.isSignedIn = true
+            $0.login = nil
+        }
+        #expect(store.state.isNewBotTipEligible)
+    }
+
+    @Test("tip not eligible after sign out")
+    func tipNotEligibleAfterSignOut() async {
+        let store = TestStore(
+            initialState: AppFeature.State(
+                daemonStatus: .connected,
+                isSignedIn: true,
+                hasLoadedBots: true
+            )
+        ) {
+            AppFeature()
+        } withDependencies: {
+            $0.daemonClient.authLogout = { _ in true }
+        }
+
+        #expect(store.state.isNewBotTipEligible)
+        await store.send(.signOutMenuItemTapped) { $0.isSignedIn = false }
+        #expect(!store.state.isNewBotTipEligible)
+    }
+
+    @Test("tip not eligible after auth_required")
+    func tipNotEligibleAfterAuthRequired() async {
+        let store = TestStore(
+            initialState: AppFeature.State(
+                daemonStatus: .connected,
+                isSignedIn: true,
+                hasLoadedBots: true
+            )
+        ) {
+            AppFeature()
+        }
+
+        await store.send(.daemonEvent(.botError(botID: "1", code: "auth_required", message: "No credentials"))) {
+            $0.isSignedIn = false
+            $0.login = LoginFeature.State()
+        }
+        #expect(!store.state.isNewBotTipEligible)
+    }
+
+    @Test("tip not eligible after a bot is created")
+    func tipNotEligibleAfterBotCreated() async {
+        let newBot = Bot(
+            id: "99",
+            name: "Fresh Bot",
+            instructions: "",
+            model: "anthropic/claude-sonnet-5-5",
+            createdAt: Date(timeIntervalSince1970: 1_700_002_000)
+        )
+        let store = TestStore(
+            initialState: AppFeature.State(
+                daemonStatus: .connected,
+                isSignedIn: true,
+                hasLoadedBots: true,
+                newBot: NewBotFeature.State()
+            )
+        ) {
+            AppFeature()
+        }
+
+        #expect(store.state.isNewBotTipEligible)
+        await store.send(.newBot(.presented(.delegate(.botCreated(newBot))))) {
+            $0.bots[id: "99"] = newBot
+            $0.newBot = nil
+        }
+        await store.receive(\.botSelected) {
+            $0.selectedBotID = "99"
+            $0.chat = ChatFeature.State(botID: "99", botName: "Fresh Bot")
+        }
+        #expect(!store.state.isNewBotTipEligible)
+    }
+
     // MARK: - Auth required → login
 
     @Test("auth_required bot.error presents login sheet")
@@ -470,13 +591,15 @@ struct AppFeatureTests {
         let store = TestStore(
             initialState: AppFeature.State(
                 bots: IdentifiedArray(uniqueElements: stubBots),
-                daemonStatus: .connected
+                daemonStatus: .connected,
+                isSignedIn: true
             )
         ) {
             AppFeature()
         }
 
         await store.send(.daemonEvent(.botError(botID: "1", code: "auth_required", message: "No credentials"))) {
+            $0.isSignedIn = false
             $0.login = LoginFeature.State()
         }
     }
@@ -488,6 +611,7 @@ struct AppFeatureTests {
                 bots: IdentifiedArray(uniqueElements: stubBots),
                 selectedBotID: "1",
                 daemonStatus: .connected,
+                isSignedIn: true,
                 chat: ChatFeature.State(botID: "1", botName: "Helper")
             )
         ) {
@@ -495,6 +619,7 @@ struct AppFeatureTests {
         }
 
         await store.send(.chat(.delegate(.authRequired))) {
+            $0.isSignedIn = false
             $0.login = LoginFeature.State()
         }
     }
@@ -552,7 +677,7 @@ struct AppFeatureTests {
         // Release bots.
         botsCont.yield([])
         botsCont.finish()
-        await store.receive(\.botsLoaded)  // [] — bots already empty, no state change
+        await store.receive(\.botsLoaded) { $0.hasLoadedBots = true }
 
         // Release hello.
         helloCont.yield(stubHello)
@@ -838,7 +963,7 @@ struct AppFeatureTests {
 
         botsCont.yield(stubBots)
         botsCont.finish()
-        await store.receive(\.botsLoaded)  // initial state already has stubBots, no change
+        await store.receive(\.botsLoaded) { $0.hasLoadedBots = true }
 
         // History reload completes with empty snapshot.
         historyCont.yield([])
