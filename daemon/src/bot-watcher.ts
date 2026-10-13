@@ -197,13 +197,11 @@ export class BotWatcher {
   async start(): Promise<void> {
     this.stream = await watchEvents(this.harness, this.convId, this.ctx);
     const botId = String(this.convId);
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self = this;
 
     this.stream.start(async (events: readonly AgentEvent[], _ctx: Context) => {
       for (const ev of events) {
-        if (self.stopped) break;
-        await self.handleEvent(ev, botId);
+        if (this.stopped) break;
+        await this.handleEvent(ev, botId);
       }
     });
   }
@@ -221,7 +219,6 @@ export class BotWatcher {
     this.emitFn(event);
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   protected async handleEvent(ev: AgentEvent, botId: string): Promise<void> {
     switch (ev.type) {
       case "run_start": {

@@ -15,10 +15,8 @@
 
 /** Minimal fetch-compatible override used in tests to avoid real network calls. */
 export interface WebToolsOptions {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetch?: (...args: any[]) => Promise<any>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const registerWebTools: (pi: any, options?: WebToolsOptions) => void;
 export default registerWebTools;

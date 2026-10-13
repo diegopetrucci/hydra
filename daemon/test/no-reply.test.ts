@@ -98,7 +98,6 @@ function eventsOfType(events: ProtocolEvent[], eventName: string, botId: string)
 
 describe("NO_REPLY sentinel", () => {
   // Resources created in each it(); closed unconditionally in afterEach.
-  // eslint-disable-next-line @typescript-eslint/no-use-before-define
   let currentCore: InstanceType<typeof DaemonCore> | undefined;
   let currentHarness: Harness | undefined;
 
