@@ -1,9 +1,15 @@
-node_modules/
-daemon/dist/
 .DS_Store
 xcuserdata/
+*.xcuserstate
+DerivedData/
 .build/
 .swiftpm/
-DerivedData/
-*.xcuserstate
+node_modules/
+daemon/dist/
+*.log
+skills-lock.json
+
+# Personal scratch notes
+TODO.md
 .agents/skills/pfw-*/
+.gnosis/
