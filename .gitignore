@@ -6,3 +6,4 @@ xcuserdata/
 .swiftpm/
 DerivedData/
 *.xcuserstate
+.agents/skills/pfw-*/
