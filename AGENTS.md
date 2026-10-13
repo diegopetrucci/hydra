@@ -35,6 +35,8 @@ Hydra/
 
 ## Commands
 
+For full validation, follow `VALIDATING.md`.
+
 ### Daemon
 
 All commands run from `daemon/`.
