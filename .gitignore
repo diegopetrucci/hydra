@@ -1,0 +1,8 @@
+node_modules/
+daemon/dist/
+.DS_Store
+xcuserdata/
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
