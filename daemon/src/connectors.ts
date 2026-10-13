@@ -80,7 +80,7 @@ export interface ConnectorDeps {
   authorize: (
     provider: McpOAuthProvider,
     options: { serverUrl: string; authorizationCode: string; iss?: string; signal?: AbortSignal },
-  ) => Promise<unknown>;
+  ) => Promise<void>;
   listenCallback: (timeoutMs: number) => Promise<CallbackHandle>;
   signInTimeoutMs: number;
   retryDelayMs: number;
@@ -91,7 +91,9 @@ export interface ConnectorDeps {
 
 const defaultDeps: ConnectorDeps = {
   createTransport: (def, auth) => new StreamableHttpTransport({ url: def.url, authProvider: auth }),
-  authorize: (provider, options) => authorizeMcp(provider, options),
+  authorize: async (provider, options) => {
+    await authorizeMcp(provider, options);
+  },
   listenCallback: (timeoutMs) =>
     OAuthCallbackServer.listen({ port: CALLBACK_PORT, host: "127.0.0.1", timeoutMs }),
   signInTimeoutMs: SIGN_IN_TIMEOUT_MS,
@@ -100,12 +102,10 @@ const defaultDeps: ConnectorDeps = {
   reconnectMaxMs: 5 * 60_000,
 };
 
-interface Entry {
+interface EntryState {
   def: ConnectorDef;
   status: ConnectorStatus;
   error?: string;
-  /** Provider for the current generation; its OAuth state writes are dropped once superseded. */
-  provider: McpOAuthProvider;
   /** Receives the authorization URL pi-mcp wants opened; set only during a sign-in. */
   redirectSink: ((url: URL) => void) | undefined;
   client: McpClient | undefined;
@@ -117,6 +117,11 @@ interface Entry {
   retryAttempt: number;
   /** Pending sign-out cleanup (client close, store delete); sign-in waits for it. */
   signOutCleanup: Promise<void> | undefined;
+}
+
+interface Entry extends EntryState {
+  /** Provider for the current generation; its OAuth state writes are dropped once superseded. */
+  provider: McpOAuthProvider;
 }
 
 interface ActiveSignIn {
@@ -166,10 +171,9 @@ export class ConnectorManager {
   ) {
     this.deps = { ...defaultDeps, ...deps };
     for (const def of CONNECTORS) {
-      const entry: Entry = {
+      const state: EntryState = {
         def,
         status: "signed_out",
-        provider: undefined as unknown as McpOAuthProvider,
         redirectSink: undefined,
         client: undefined,
         opening: undefined,
@@ -179,7 +183,7 @@ export class ConnectorManager {
         retryAttempt: 0,
         signOutCleanup: undefined,
       };
-      entry.provider = this.makeProvider(entry);
+      const entry: Entry = Object.assign(state, { provider: this.makeProvider(state) });
       this.entries.set(def.id, entry);
     }
   }
@@ -198,7 +202,7 @@ export class ConnectorManager {
 
   /** Resolves when background connects scheduled so far have settled (tests). */
   async settled(): Promise<void> {
-    await Promise.allSettled([...this.background]);
+    await Promise.allSettled(this.background);
   }
 
   /**
@@ -211,7 +215,7 @@ export class ConnectorManager {
   }
 
   private notifyChange(): void {
-    for (const listener of [...this.listeners]) {
+    for (const listener of Array.from(this.listeners)) {
       try {
         listener();
       } catch (e) {
@@ -344,7 +348,7 @@ export class ConnectorManager {
   }
 
   /** A provider whose state writes and redirects are only honoured while its generation is current. */
-  private makeProvider(entry: Entry): McpOAuthProvider {
+  private makeProvider(entry: EntryState): McpOAuthProvider {
     const gen = entry.gen;
     const current = (): boolean => gen === entry.gen;
     return new McpOAuthProvider({

@@ -8,7 +8,7 @@
 
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { AssistantEntry, Harness, UserEntry, createRegistry } from "@earendil-works/pi-durable";
+import { AssistantEntry, Harness, UserEntry } from "@earendil-works/pi-durable";
 import type { Conversation, ConversationId, Cursor, EntryRecord } from "@earendil-works/pi-durable";
 import type { AssistantMessage, UserMessage, TextContent, Models } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -30,13 +30,13 @@ import type {
   BotInfo,
   BotsCreateRequest,
   BotsHistoryRequest,
-  BotsListRequest,
   BotsSendRequest,
   BotsStopRequest,
   ConnectorsSignInRequest,
   ConnectorsSignOutRequest,
   ErrResponse,
   HelloRequest,
+  Request as ProtocolRequest,
   MessageInfo,
   OkResponse,
   ProtocolEvent,
@@ -125,9 +125,10 @@ export class DaemonCore {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       return err(null, "bad_request", "Request must be a JSON object");
     }
-    const req = raw as Record<string, unknown>;
-    const id = typeof req["id"] === "string" ? req["id"] : null;
-    const type = req["type"];
+    // The envelope is checked below; each handler validates its own payload fields.
+    const request = raw as ProtocolRequest;
+    const id = typeof request.id === "string" ? request.id : null;
+    const type: unknown = request.type;
 
     if (typeof type !== "string") {
       return err(id, "bad_request", "Missing or non-string 'type' field");
@@ -139,44 +140,44 @@ export class DaemonCore {
     }
 
     try {
-      switch (type) {
+      switch (request.type) {
         case "hello":
           // Synchronous – no await needed.
-          return this.cmdHello(id, req as unknown as HelloRequest);
+          return this.cmdHello(id, request);
         case "models.list":
           // Synchronous – no await needed.
           return this.cmdModelsList(id);
         case "bots.list":
           return await this.cmdBotsList(id);
         case "bots.create":
-          return await this.cmdBotsCreate(id, req as unknown as BotsCreateRequest);
+          return await this.cmdBotsCreate(id, request);
         case "bots.history":
-          return await this.cmdBotsHistory(id, req as unknown as BotsHistoryRequest);
+          return await this.cmdBotsHistory(id, request);
         case "bots.send":
-          return await this.cmdBotsSend(id, req as unknown as BotsSendRequest);
+          return await this.cmdBotsSend(id, request);
         case "bots.stop":
-          return await this.cmdBotsStop(id, req as unknown as BotsStopRequest);
+          return await this.cmdBotsStop(id, request);
         case "auth.status":
           return await this.cmdAuthStatus(id);
         case "auth.login":
           // Synchronous – no await needed.
-          return this.cmdAuthLogin(id, req as unknown as AuthLoginRequest);
+          return this.cmdAuthLogin(id, request);
         case "auth.respond":
           // Synchronous – no await needed.
-          return this.cmdAuthRespond(id, req as unknown as AuthRespondRequest);
+          return this.cmdAuthRespond(id, request);
         case "auth.cancel":
           // Synchronous – no await needed.
-          return this.cmdAuthCancel(id, req as unknown as AuthCancelRequest);
+          return this.cmdAuthCancel(id, request);
         case "auth.setApiKey":
-          return await this.cmdAuthSetApiKey(id, req as unknown as AuthSetApiKeyRequest);
+          return await this.cmdAuthSetApiKey(id, request);
         case "auth.logout":
-          return await this.cmdAuthLogout(id, req as unknown as AuthLogoutRequest);
+          return await this.cmdAuthLogout(id, request);
         case "connectors.list":
           return this.cmdConnectorsList(id);
         case "connectors.signIn":
-          return await this.cmdConnectorsSignIn(id, req as unknown as ConnectorsSignInRequest);
+          return await this.cmdConnectorsSignIn(id, request);
         case "connectors.signOut":
-          return await this.cmdConnectorsSignOut(id, req as unknown as ConnectorsSignOutRequest);
+          return await this.cmdConnectorsSignOut(id, request);
         default:
           return err(id, "unknown_command", `Unknown command type: ${type}`);
       }
@@ -535,11 +536,11 @@ export class DaemonCore {
     });
   }
 
-  private async connectorCommand(
+  private async connectorCommand<T>(
     id: string,
     connectorId: unknown,
-    run: (c: ConnectorManager) => Promise<unknown>,
-  ): Promise<OkResponse<unknown> | ErrResponse> {
+    run: (c: ConnectorManager) => Promise<T>,
+  ): Promise<OkResponse<T> | ErrResponse> {
     if (!this.connectors) return err(id, "unavailable", "Connectors are not available.");
     if (!connectorId || typeof connectorId !== "string") {
       return err(id, "bad_request", "connectorId is required");

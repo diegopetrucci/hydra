@@ -232,7 +232,8 @@ const ACTIONS_JOB_URL =
 function parseJobUrl(url: string): { repo: string; runId: string; jobId: string } | null {
   const m = ACTIONS_JOB_URL.exec(url);
   if (!m) return null;
-  const [, repo, runId, jobId] = m as unknown as [string, string, string, string];
+  const [, repo, runId, jobId] = m;
+  if (repo === undefined || runId === undefined || jobId === undefined) return null;
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !/^\d+$/.test(runId) || !/^\d+$/.test(jobId)) return null;
   return { repo, runId, jobId };
 }
@@ -568,7 +569,7 @@ export function createCiWatchExtension(options: CiWatchOptions = {}): {
       if (!harnessRef) return toolErr("Internal error: harness not available.");
 
       for (const id of ids) {
-        await harnessRef.abortTask(Number(id) as unknown as TaskId<void>, ctx);
+        await harnessRef.abortTask(Number(id) as TaskId<void>, ctx);
       }
       // Idempotent cleanup in case the task was already terminal.
       await api.commit(async (tx) => {

@@ -189,7 +189,7 @@ export function connectorsPromptText(
  */
 export function attachConnectorTools(registry: Registry, manager: ConnectorManager): () => void {
   const installed = new Map<string, { extension: Extension; signature: string }>();
-  const toolSearch = createToolSearchExtension() as unknown as Extension;
+  const toolSearch = createToolSearchExtension();
   let toolSearchInstalled = false;
   let promptKey: string | undefined;
   let promptExtension: Extension | undefined;

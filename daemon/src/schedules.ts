@@ -19,7 +19,6 @@
 import { defineDoc, defineExtension, defineTool, defineTask } from "@earendil-works/pi-durable";
 import type {
   ConversationDocToken,
-  ConversationId,
   Extension,
   Harness,
   TaskId,
@@ -775,7 +774,7 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
         return toolErr("Internal error: harness not available.");
       }
 
-      const taskId = idNum as unknown as TaskId<void>;
+      const taskId = idNum as TaskId<void>;
       const abortResult = await harnessRef.abortTask(taskId, ctx);
 
       return {

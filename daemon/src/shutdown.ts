@@ -41,7 +41,7 @@ export function createShutdown(
       }, deps.backstopMs ?? 5_000);
       backstop.unref();
 
-      await Promise.allSettled([...deps.inFlight()]);
+      await Promise.allSettled(deps.inFlight());
       if (deps.closeConnectors)
         await Promise.resolve()
           .then(deps.closeConnectors)

@@ -14,7 +14,7 @@ export type SessionEndLike = { reason: "closed" } | { reason: "failed"; error: u
 
 export function exitOnSessionFailure(
   closed: Promise<SessionEndLike>,
-  deps: { shutdown: (code: number, logLine: string) => unknown },
+  deps: { shutdown: (code: number, logLine: string) => void | Promise<void> },
 ): void {
   closed.then(
     (end) => {

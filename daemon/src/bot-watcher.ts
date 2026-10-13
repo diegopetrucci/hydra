@@ -437,7 +437,7 @@ export class BotWatcher {
         // "oauth", "credential") and HTTP 401/403 indicators in the message text.
         // The event type doesn't expose `detail` but the runtime may include it
         // when TaskOutcomeError serialises structured data; pass it when present.
-        const detail = (ev as unknown as { detail?: unknown }).detail;
+        const detail = "detail" in ev ? ev.detail : undefined;
         const isAuthError = isTaskFailedAuthError(ev.message, detail);
         const code = isAuthError ? "auth_required" : "generation_failed";
         const message = isAuthError
