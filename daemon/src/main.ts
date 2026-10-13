@@ -30,7 +30,12 @@ import { FileConnectorStore } from "./connector-store.js";
 import { ConnectorManager } from "./connectors.js";
 import { attachConnectorTools } from "./connector-tools.js";
 import type { ProtocolEvent } from "./protocol.js";
-import { webToolsExtension, ensureWebAccessDir, WEB_TOOL_NAMES, resetWebToolsBudget } from "./web-tools.js";
+import {
+  webToolsExtension,
+  ensureWebAccessDir,
+  WEB_TOOL_NAMES,
+  resetWebToolsBudget,
+} from "./web-tools.js";
 import { hydraExtension } from "./system-prompt.js";
 import { createSchedulesExtension, SCHEDULE_TOOL_NAMES } from "./schedules.js";
 import { createCiWatchExtension, CI_TOOL_NAMES } from "./ci-watch.js";
@@ -88,8 +93,7 @@ async function main(): Promise<void> {
     createSchedulesExtension(); // production: minIntervalMs=60_000, maxSchedules=5
   registry.install(schedulesExtension);
 
-  const { extension: ciWatchExtension, setHarness: setCiWatchHarness } =
-    createCiWatchExtension(); // production: pollMs=60_000, real gh
+  const { extension: ciWatchExtension, setHarness: setCiWatchHarness } = createCiWatchExtension(); // production: pollMs=60_000, real gh
   registry.install(ciWatchExtension);
 
   // Set PI_CODING_AGENT_DIR to <dataDir>/web-access (0700) so that the web
@@ -102,7 +106,9 @@ async function main(): Promise<void> {
   const models = createModels(credStore);
   // MCP connectors: OAuth state at <dataDir>/connectors.json (mode 0600).
   // Declared before the shutdown routine so it can close them.
-  const connectors = new ConnectorManager(new FileConnectorStore(dataDir), (event) => writeStdout(event));
+  const connectors = new ConnectorManager(new FileConnectorStore(dataDir), (event) =>
+    writeStdout(event),
+  );
 
   // Connector tools, tool_search and their prompt section follow connector state at runtime.
   attachConnectorTools(registry, connectors);
@@ -164,7 +170,11 @@ async function main(): Promise<void> {
     try {
       parsed = JSON.parse(trimmed);
     } catch {
-      writeStdout({ id: null, type: "error", error: { code: "parse_error", message: "Invalid JSON" } });
+      writeStdout({
+        id: null,
+        type: "error",
+        error: { code: "parse_error", message: "Invalid JSON" },
+      });
       return;
     }
 
@@ -175,7 +185,11 @@ async function main(): Promise<void> {
         // Never surface raw exception strings: they may contain secrets, HTTP
         // response bodies, or upstream URLs.  Log only the class and code.
         process.stderr.write(`[hydra-daemon] request error: ${describeError(e)}\n`);
-        writeStdout({ id: null, type: "error", error: { code: "internal_error", message: "Internal error." } });
+        writeStdout({
+          id: null,
+          type: "error",
+          error: { code: "internal_error", message: "Internal error." },
+        });
       });
 
     inFlight.add(p);

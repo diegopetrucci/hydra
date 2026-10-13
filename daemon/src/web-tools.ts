@@ -14,7 +14,12 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { defineExtension, section } from "@earendil-works/pi-durable";
-import type { Extension, PromptSection, ToolRegistration, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type {
+  Extension,
+  PromptSection,
+  ToolRegistration,
+  ToolExecutionResult,
+} from "@earendil-works/pi-durable";
 import type { TSchema } from "@earendil-works/pi-ai";
 import type { Context } from "@earendil-works/chord";
 
@@ -77,7 +82,11 @@ function buildExtension(options?: { fetch?: FetchLike }): {
       ...(t.prepareArguments
         ? { prepareArguments: t.prepareArguments as ToolRegistration["prepareArguments"] }
         : {}),
-      async execute(args: unknown, api: { callId: string }, context: Context): Promise<ToolExecutionResult> {
+      async execute(
+        args: unknown,
+        api: { callId: string },
+        context: Context,
+      ): Promise<ToolExecutionResult> {
         const signal = context.abortSignal ?? undefined;
         // onUpdate is omitted: the daemon has no live TUI; intermediate progress
         // is not streamed to protocol clients.
@@ -135,8 +144,7 @@ export const webToolsExtension: Extension = _ext;
 export const resetWebToolsBudget: () => void = _handler ?? ((): void => {});
 
 /** Names of the tools registered by the web-tools extension. */
-export const WEB_TOOL_NAMES: readonly string[] =
-  _ext.tools?.map((t) => t.name) ?? [];
+export const WEB_TOOL_NAMES: readonly string[] = _ext.tools?.map((t) => t.name) ?? [];
 
 // ─── Setup helper ─────────────────────────────────────────────────────────────
 

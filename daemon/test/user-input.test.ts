@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { modelMessagesAreHuman } from "../src/user-input.js";
 
-const user = (content: string | { type: "text"; text: string }[]) => ({ role: "user", content, timestamp: 0 });
+const user = (content: string | { type: "text"; text: string }[]) => ({
+  role: "user",
+  content,
+  timestamp: 0,
+});
 
 describe("modelMessagesAreHuman", () => {
   it("fails closed on empty or missing model", () => {

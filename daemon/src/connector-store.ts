@@ -64,7 +64,9 @@ export class FileConnectorStore {
     try {
       await chmod(this.path, 0o600);
     } catch {
-      process.stderr.write("[hydra-daemon] connectors.json permissions could not be restricted; ignoring it.\n");
+      process.stderr.write(
+        "[hydra-daemon] connectors.json permissions could not be restricted; ignoring it.\n",
+      );
       return { connectors: {} };
     }
     let raw: string;
@@ -105,7 +107,10 @@ export class FileConnectorStore {
   /** Run fn after every previously enqueued write settles. */
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.chain.then(fn, fn);
-    this.chain = result.then(() => {}, () => {});
+    this.chain = result.then(
+      () => {},
+      () => {},
+    );
     return result;
   }
 }

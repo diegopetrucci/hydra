@@ -19,7 +19,10 @@ export function exitOnSessionFailure(
   closed.then(
     (end) => {
       if (end.reason !== "failed") return;
-      void deps.shutdown(1, `[hydra-daemon] Session failed: ${describeError(end.error)}. Exiting.\n`);
+      void deps.shutdown(
+        1,
+        `[hydra-daemon] Session failed: ${describeError(end.error)}. Exiting.\n`,
+      );
     },
     () => {
       // `closed` is not expected to reject; treat it as a failure too.

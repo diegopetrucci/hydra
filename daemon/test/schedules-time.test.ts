@@ -57,7 +57,7 @@ describe("TZ guard (Europe/London)", () => {
    */
   it("winter UTC+0: 2027-01-01 09:00 local === UTC 09:00", () => {
     const local = new Date(2027, 0, 1, 9, 0, 0, 0).getTime();
-    const utc   = Date.UTC(2027, 0, 1, 9, 0, 0, 0);
+    const utc = Date.UTC(2027, 0, 1, 9, 0, 0, 0);
     expect(local).toBe(utc);
   });
 
@@ -67,7 +67,7 @@ describe("TZ guard (Europe/London)", () => {
    */
   it("summer UTC+1: 2027-06-01 09:00 local === UTC 08:00", () => {
     const local = new Date(2027, 5, 1, 9, 0, 0, 0).getTime();
-    const utc   = Date.UTC(2027, 5, 1, 8, 0, 0, 0);
+    const utc = Date.UTC(2027, 5, 1, 8, 0, 0, 0);
     expect(local).toBe(utc);
   });
 });
@@ -118,7 +118,7 @@ describe("parseAtField – acceptance", () => {
     expect(result).toHaveProperty("ms");
     const d = new Date((result as { ms: number }).ms);
     expect(d.getFullYear()).toBe(2027);
-    expect(d.getMonth()).toBe(5);   // June = index 5
+    expect(d.getMonth()).toBe(5); // June = index 5
     expect(d.getDate()).toBe(15);
     expect(d.getHours()).toBe(14);
     expect(d.getMinutes()).toBe(30);
@@ -129,7 +129,7 @@ describe("parseAtField – acceptance", () => {
     const result = parseAtField("14:30", NOW_MS);
     expect(result).toHaveProperty("ms");
     const d = new Date((result as { ms: number }).ms);
-    expect(d.getDate()).toBe(15);   // same day (2027-01-15)
+    expect(d.getDate()).toBe(15); // same day (2027-01-15)
     expect(d.getHours()).toBe(14);
     expect(d.getMinutes()).toBe(30);
   });
@@ -139,7 +139,7 @@ describe("parseAtField – acceptance", () => {
     const result = parseAtField("09:00", NOW_MS);
     expect(result).toHaveProperty("ms");
     const d = new Date((result as { ms: number }).ms);
-    expect(d.getDate()).toBe(16);   // next day (2027-01-16)
+    expect(d.getDate()).toBe(16); // next day (2027-01-16)
     expect(d.getHours()).toBe(9);
     expect(d.getMinutes()).toBe(0);
   });
@@ -161,8 +161,8 @@ describe("nextRunAt – spring-forward day (Europe/London 2027-03-28)", () => {
     const nextMs = nextRunAt(dailyRule, fromMs);
     const d = new Date(nextMs);
     expect(d.getFullYear()).toBe(2027);
-    expect(d.getMonth()).toBe(2);   // March
-    expect(d.getDate()).toBe(28);   // spring-forward day
+    expect(d.getMonth()).toBe(2); // March
+    expect(d.getDate()).toBe(28); // spring-forward day
     // 01:30 doesn't exist; JavaScript normalises to 02:30
     expect(d.getHours()).toBe(2);
     expect(d.getMinutes()).toBe(30);
@@ -180,8 +180,8 @@ describe("nextRunAt – spring-forward day (Europe/London 2027-03-28)", () => {
     const nextMs = nextRunAt(dailyRule, springForwardRunMs);
     const d = new Date(nextMs);
     expect(d.getFullYear()).toBe(2027);
-    expect(d.getMonth()).toBe(2);   // March
-    expect(d.getDate()).toBe(29);   // the day after spring-forward
+    expect(d.getMonth()).toBe(2); // March
+    expect(d.getDate()).toBe(29); // the day after spring-forward
     // 01:30 now exists in BST; the requested hour must be restored
     expect(d.getHours()).toBe(1);
     expect(d.getMinutes()).toBe(30);
@@ -207,9 +207,9 @@ describe("nextRunAt – weekdays_only skipping weekend", () => {
     const nextMs = nextRunAt(rule, fromMs);
     const d = new Date(nextMs);
     expect(d.getFullYear()).toBe(2027);
-    expect(d.getMonth()).toBe(0);   // January
-    expect(d.getDate()).toBe(4);    // Monday
-    expect(d.getDay()).toBe(1);     // 1 = Monday
+    expect(d.getMonth()).toBe(0); // January
+    expect(d.getDate()).toBe(4); // Monday
+    expect(d.getDay()).toBe(1); // 1 = Monday
     expect(d.getHours()).toBe(9);
     expect(d.getMinutes()).toBe(0);
   });

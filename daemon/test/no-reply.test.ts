@@ -20,15 +20,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Harness, MemoryStorage, createRegistry } from "@earendil-works/pi-durable";
-import {
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import type {
-  FauxProviderHandle,
-  FauxResponseFactory,
-} from "@earendil-works/pi-ai/providers/faux";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
+import type { FauxProviderHandle, FauxResponseFactory } from "@earendil-works/pi-ai/providers/faux";
 import type { TranscriptContext } from "@earendil-works/pi-ai";
 import { createTestModels } from "../src/models.js";
 import { DaemonCore } from "../src/daemon-core.js";
@@ -93,7 +86,11 @@ async function makeCore(): Promise<{
 /** Events for a given botId that match a given event name. */
 function eventsOfType(events: ProtocolEvent[], eventName: string, botId: string): ProtocolEvent[] {
   return events.filter(
-    (e) => e.type === "event" && e.event === eventName && "botId" in e && (e as { botId: string }).botId === botId,
+    (e) =>
+      e.type === "event" &&
+      e.event === eventName &&
+      "botId" in e &&
+      (e as { botId: string }).botId === botId,
   );
 }
 
@@ -132,7 +129,11 @@ describe("NO_REPLY sentinel", () => {
 
     // Fetch the initial bot info to capture lastMessagePreview / lastMessageAt before.
     const listBefore = await core.handleRequest({ id: "r0", type: "bots.list" });
-    const botsBefore = (listBefore as { result: { id: string; lastMessagePreview?: string; lastMessageAt?: string }[] }).result;
+    const botsBefore = (
+      listBefore as {
+        result: { id: string; lastMessagePreview?: string; lastMessageAt?: string }[];
+      }
+    ).result;
     const metaBefore = botsBefore.find((b) => b.id === botId);
 
     await core.handleRequest({
@@ -165,7 +166,9 @@ describe("NO_REPLY sentinel", () => {
 
     // lastMessagePreview / lastMessageAt should be unchanged (not updated by NO_REPLY).
     const listAfter = await core.handleRequest({ id: "r4", type: "bots.list" });
-    const botsAfter = (listAfter as { result: { id: string; lastMessagePreview?: string; lastMessageAt?: string }[] }).result;
+    const botsAfter = (
+      listAfter as { result: { id: string; lastMessagePreview?: string; lastMessageAt?: string }[] }
+    ).result;
     const metaAfter = botsAfter.find((b) => b.id === botId);
     expect(metaAfter?.lastMessagePreview).toBe(metaBefore?.lastMessagePreview);
     expect(metaAfter?.lastMessageAt).toBe(metaBefore?.lastMessageAt);
@@ -196,9 +199,7 @@ describe("NO_REPLY sentinel", () => {
       clientMessageId: "cm-2",
     });
 
-    await waitFor(() =>
-      eventsOfType(events, "message.completed", botId).length > 0,
-    );
+    await waitFor(() => eventsOfType(events, "message.completed", botId).length > 0);
 
     // message.started arrived.
     const started = eventsOfType(events, "message.started", botId);
@@ -216,7 +217,9 @@ describe("NO_REPLY sentinel", () => {
 
     // message.started and message.completed share the same messageId.
     const startedId = (started[0] as { messageId: string }).messageId;
-    const completedId = eventsOfType(events, "message.completed", botId)[0] as { messageId: string };
+    const completedId = eventsOfType(events, "message.completed", botId)[0] as {
+      messageId: string;
+    };
     expect(startedId).toBe(completedId.messageId);
   });
 
@@ -313,10 +316,9 @@ describe("NO_REPLY sentinel", () => {
     const responder: FauxResponseFactory = (_ctx: TranscriptContext) => {
       callCount++;
       if (callCount === 1) {
-        return fauxAssistantMessage(
-          fauxToolCall("web_search", { query: "test" }),
-          { stopReason: "toolUse" },
-        );
+        return fauxAssistantMessage(fauxToolCall("web_search", { query: "test" }), {
+          stopReason: "toolUse",
+        });
       }
       return fauxAssistantMessage(fauxText(NO_REPLY));
     };
@@ -356,9 +358,7 @@ describe("NO_REPLY sentinel", () => {
     const completedEvents = eventsOfType(events, "message.completed", botId) as Array<{
       message: { text: string };
     }>;
-    const hasNoReplyCompleted = completedEvents.some(
-      (e) => e.message.text.trim() === NO_REPLY,
-    );
+    const hasNoReplyCompleted = completedEvents.some((e) => e.message.text.trim() === NO_REPLY);
     expect(hasNoReplyCompleted).toBe(false);
 
     // bots.history: no assistant entries with text (tool-call entries have no
@@ -378,10 +378,9 @@ describe("NO_REPLY sentinel", () => {
     const responder: FauxResponseFactory = (_ctx: TranscriptContext) => {
       callCount++;
       if (callCount === 1) {
-        return fauxAssistantMessage(
-          fauxToolCall("web_search", { query: "test" }),
-          { stopReason: "toolUse" },
-        );
+        return fauxAssistantMessage(fauxToolCall("web_search", { query: "test" }), {
+          stopReason: "toolUse",
+        });
       }
       return fauxAssistantMessage(fauxText("Found it."));
     };

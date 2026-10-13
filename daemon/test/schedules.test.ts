@@ -23,14 +23,22 @@ import { join } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { describe, it, expect, afterEach } from "vitest";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Harness, MemoryStorage, ToolResultEntry, createRegistry } from "@earendil-works/pi-durable";
-import type { ConversationDocToken, ConversationId, Cursor, EntryRecord, Storage, TaskId } from "@earendil-works/pi-durable";
-import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import {
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+  Harness,
+  MemoryStorage,
+  ToolResultEntry,
+  createRegistry,
+} from "@earendil-works/pi-durable";
+import type {
+  ConversationDocToken,
+  ConversationId,
+  Cursor,
+  EntryRecord,
+  Storage,
+  TaskId,
+} from "@earendil-works/pi-durable";
+import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import type { FauxProviderHandle, FauxResponseFactory } from "@earendil-works/pi-ai/providers/faux";
 import type { TranscriptContext } from "@earendil-works/pi-ai";
 import { createTestModels } from "../src/models.js";
@@ -87,7 +95,11 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 type BotResult = { id: string };
 type MsgResult = { id: string; role: string; text: string };
-type CompletedEvent = ProtocolEvent & { event: "message.completed"; botId: string; message: MsgResult };
+type CompletedEvent = ProtocolEvent & {
+  event: "message.completed";
+  botId: string;
+  message: MsgResult;
+};
 
 /** Count message.completed events in the events array. */
 function completedCount(events: ProtocolEvent[], botId?: string): number {
@@ -144,10 +156,9 @@ function makeCancelResponder(getScheduleId: () => string): FauxResponseFactory {
     if (last.role === "toolResult") return fauxAssistantMessage(fauxText("Cancelled."));
     const text = msgText(last);
     if (text.startsWith(CHECKIN_MARKER)) return fauxAssistantMessage(fauxText("Check-in handled."));
-    return fauxAssistantMessage(
-      fauxToolCall("cancel_schedule", { id: getScheduleId() }),
-      { stopReason: "toolUse" },
-    );
+    return fauxAssistantMessage(fauxToolCall("cancel_schedule", { id: getScheduleId() }), {
+      stopReason: "toolUse",
+    });
   };
 }
 
@@ -225,7 +236,9 @@ async function readSchedulesDoc(
   botId: string,
 ): Promise<{ schedules: Record<string, Record<string, string | number>> } | undefined> {
   return harness.snapshot(
-    SchedulesDoc as ConversationDocToken<{ schedules: Record<string, Record<string, string | number>> }>,
+    SchedulesDoc as ConversationDocToken<{
+      schedules: Record<string, Record<string, string | number>>;
+    }>,
     Number(botId) as ConversationId,
     ctx,
   );
@@ -256,7 +269,9 @@ async function getLastToolResult(
   if (toolResults.length === 0) return undefined;
 
   const last = toolResults[0]!;
-  const msg = last.model?.[0] as { isError: boolean; content: Array<{ type: string; text?: string }> } | undefined;
+  const msg = last.model?.[0] as
+    | { isError: boolean; content: Array<{ type: string; text?: string }> }
+    | undefined;
   if (!msg) return undefined;
 
   const text = msg.content
@@ -336,8 +351,11 @@ describe("(b) recurring check-ins and bots.history filtering", () => {
 
       // message.started also arrived for each response (at least 3 total)
       const started = events.filter(
-        (e) => e.type === "event" && e.event === "message.started" &&
-          "botId" in e && (e as { botId: string }).botId === botId,
+        (e) =>
+          e.type === "event" &&
+          e.event === "message.started" &&
+          "botId" in e &&
+          (e as { botId: string }).botId === botId,
       );
       expect(started.length).toBeGreaterThanOrEqual(3);
 
@@ -378,8 +396,12 @@ describe("(c) SQLite: close mid-sleep, reopen after due", () => {
 
       // ── Open first harness ───────────────────────────────────────────────
       const storage1 = await openNodeSqliteStorage(dbPath);
-      const { core: core1, events: events1, faux: faux1, harness: harness1 } =
-        await makeSchedulesCore(storage1);
+      const {
+        core: core1,
+        events: events1,
+        faux: faux1,
+        harness: harness1,
+      } = await makeSchedulesCore(storage1);
 
       // Schedule a once check-in ~2 seconds from now
       const schedArgs = { kind: "once", in_minutes: 2 / 60 };
@@ -408,8 +430,12 @@ describe("(c) SQLite: close mid-sleep, reopen after due", () => {
 
       // ── Reopen ──────────────────────────────────────────────────────────
       const storage2 = await openNodeSqliteStorage(dbPath);
-      const { core: core2, events: events2, faux: faux2, harness: harness2 } =
-        await makeSchedulesCore(storage2);
+      const {
+        core: core2,
+        events: events2,
+        faux: faux2,
+        harness: harness2,
+      } = await makeSchedulesCore(storage2);
 
       try {
         // Set up faux for the check-in generation that fires on resume
@@ -466,9 +492,7 @@ describe("(d) cancel_schedule", () => {
       expect(scheduleId).toBeDefined();
 
       // Switch to cancel responder
-      faux.setResponses(
-        Array.from({ length: 20 }, () => makeCancelResponder(() => scheduleId!)),
-      );
+      faux.setResponses(Array.from({ length: 20 }, () => makeCancelResponder(() => scheduleId!)));
 
       await core.handleRequest({
         id: "d2",
@@ -590,12 +614,24 @@ describe("(f) validation rejections", () => {
 
     // Schedule 1 (success): wait for both completions (tool-call + "Done.")
     let countBefore = completedCount(events, botId);
-    await core.handleRequest({ id: "fv2a", type: "bots.send", botId, text: "schedule 1", clientMessageId: "cm-fv-2a" });
+    await core.handleRequest({
+      id: "fv2a",
+      type: "bots.send",
+      botId,
+      text: "schedule 1",
+      clientMessageId: "cm-fv-2a",
+    });
     await waitFor(() => completedCount(events, botId) >= countBefore + 1, 8_000);
 
     // Schedule 2 (rejected – maxSchedules=1): wait for FINAL reply (tool-call + "Done.")
     countBefore = completedCount(events, botId);
-    await core.handleRequest({ id: "fv2b", type: "bots.send", botId, text: "schedule 2", clientMessageId: "cm-fv-2b" });
+    await core.handleRequest({
+      id: "fv2b",
+      type: "bots.send",
+      botId,
+      text: "schedule 2",
+      clientMessageId: "cm-fv-2b",
+    });
     await waitFor(() => completedCount(events, botId) >= countBefore + 1, 8_000);
 
     // Tool result must be an error mentioning the limit
@@ -617,9 +653,7 @@ describe("(f) validation rejections", () => {
     const pastDt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
     faux.setResponses(
-      Array.from({ length: 10 }, () =>
-        makeScheduleResponder({ kind: "once", at: pastDt }),
-      ),
+      Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "once", at: pastDt })),
     );
 
     const botId = await createBot(core);
@@ -648,7 +682,9 @@ describe("(f) validation rejections", () => {
     const { core, events, faux, harness } = await makeSchedulesCore();
 
     // First, create a real schedule (every 10 minutes so it won't fire during this test)
-    faux.setResponses(Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "every", every_minutes: 10 })));
+    faux.setResponses(
+      Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "every", every_minutes: 10 })),
+    );
     const botId = await createBot(core);
     await core.handleRequest({
       id: "fv4-sched",
@@ -663,17 +699,18 @@ describe("(f) validation rejections", () => {
     const docBefore = await readSchedulesDoc(harness, botId);
     const realId = Object.keys(docBefore?.schedules ?? {})[0];
     expect(realId).toBeDefined();
-    const realTaskId = Number(realId) as unknown as import("@earendil-works/pi-durable").TaskId<void>;
+    const realTaskId = Number(
+      realId,
+    ) as unknown as import("@earendil-works/pi-durable").TaskId<void>;
 
     // Now try to cancel a non-existent id
     const cancelResponder: FauxResponseFactory = (context: TranscriptContext) => {
       const last = [...context.messages].reverse().find((m) => m.role !== "system");
       if (!last) return fauxAssistantMessage(fauxText("ok"));
       if (last.role === "toolResult") return fauxAssistantMessage(fauxText("Cancelled."));
-      return fauxAssistantMessage(
-        fauxToolCall("cancel_schedule", { id: 99999999 }),
-        { stopReason: "toolUse" },
-      );
+      return fauxAssistantMessage(fauxToolCall("cancel_schedule", { id: 99999999 }), {
+        stopReason: "toolUse",
+      });
     };
     faux.setResponses(Array.from({ length: 10 }, () => cancelResponder));
 
@@ -706,7 +743,9 @@ describe("(f) validation rejections", () => {
     const { core, events, faux, harness } = await makeSchedulesCore();
 
     // Bot A: create a long-interval schedule so it doesn't fire during the test
-    faux.setResponses(Array.from({ length: 20 }, () => makeScheduleResponder({ kind: "every", every_minutes: 10 })));
+    faux.setResponses(
+      Array.from({ length: 20 }, () => makeScheduleResponder({ kind: "every", every_minutes: 10 })),
+    );
 
     const botA = await createBot(core, "Bot A");
     await core.handleRequest({
@@ -723,13 +762,13 @@ describe("(f) validation rejections", () => {
     const docA = await readSchedulesDoc(harness, botA);
     const schedIdA = Object.keys(docA?.schedules ?? {})[0];
     expect(schedIdA).toBeDefined();
-    const taskIdA = Number(schedIdA) as unknown as import("@earendil-works/pi-durable").TaskId<void>;
+    const taskIdA = Number(
+      schedIdA,
+    ) as unknown as import("@earendil-works/pi-durable").TaskId<void>;
 
     // Bot B: try to cancel bot A's schedule
     const botB = await createBot(core, "Bot B");
-    faux.setResponses(
-      Array.from({ length: 10 }, () => makeCancelResponder(() => schedIdA!)),
-    );
+    faux.setResponses(Array.from({ length: 10 }, () => makeCancelResponder(() => schedIdA!)));
 
     const countBefore = completedCount(events, botB);
     await core.handleRequest({
@@ -766,10 +805,7 @@ describe("list_schedules via model tool call", () => {
       const last = [...context.messages].reverse().find((m) => m.role !== "system");
       if (!last) return fauxAssistantMessage(fauxText("ok"));
       if (last.role === "toolResult") return fauxAssistantMessage(fauxText("Listed."));
-      return fauxAssistantMessage(
-        fauxToolCall("list_schedules", {}),
-        { stopReason: "toolUse" },
-      );
+      return fauxAssistantMessage(fauxToolCall("list_schedules", {}), { stopReason: "toolUse" });
     };
   }
 
@@ -796,7 +832,9 @@ describe("list_schedules via model tool call", () => {
     const { core, events, faux, harness } = await makeSchedulesCore();
 
     // First, create a schedule
-    faux.setResponses(Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "every", every_minutes: 10 })));
+    faux.setResponses(
+      Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "every", every_minutes: 10 })),
+    );
     const botId = await createBot(core);
     await core.handleRequest({
       id: "ls2a",
@@ -845,7 +883,9 @@ describe("schedule_message consent-first backstop", () => {
       if (last.role === "toolResult") return fauxAssistantMessage(fauxText("Done."));
       const text = msgText(last);
       if (text.includes("cancel")) {
-        return fauxAssistantMessage(fauxToolCall("cancel_schedule", { id: getId() }), { stopReason: "toolUse" });
+        return fauxAssistantMessage(fauxToolCall("cancel_schedule", { id: getId() }), {
+          stopReason: "toolUse",
+        });
       }
       if (text.includes("list")) {
         return fauxAssistantMessage(fauxToolCall("list_schedules", {}), { stopReason: "toolUse" });
@@ -863,7 +903,13 @@ describe("schedule_message consent-first backstop", () => {
     faux.setResponses(Array.from({ length: 20 }, () => makeBackstopResponder(() => schedId)));
     const botId = await createBot(core);
     const send = (text: string, n: number) =>
-      core.handleRequest({ id: `bs${n}`, type: "bots.send", botId, text, clientMessageId: `cm-bs-${n}` });
+      core.handleRequest({
+        id: `bs${n}`,
+        type: "bots.send",
+        botId,
+        text,
+        clientMessageId: `cm-bs-${n}`,
+      });
 
     // (a) hidden-trigger style input: refused, nothing created.
     await send("[Hydra intro] schedule something", 1);
@@ -901,7 +947,11 @@ describe("schedule_message consent-first backstop", () => {
 describe("schedule_message bounds (item 5)", () => {
   it("rejects every_minutes > 525600", async () => {
     const { core, events, faux, harness } = await makeSchedulesCore();
-    faux.setResponses(Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "every", every_minutes: 525_601 })));
+    faux.setResponses(
+      Array.from({ length: 10 }, () =>
+        makeScheduleResponder({ kind: "every", every_minutes: 525_601 }),
+      ),
+    );
 
     const botId = await createBot(core);
     await core.handleRequest({
@@ -923,7 +973,11 @@ describe("schedule_message bounds (item 5)", () => {
 
   it("rejects in_minutes > 525600", async () => {
     const { core, events, faux, harness } = await makeSchedulesCore();
-    faux.setResponses(Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "once", in_minutes: 525_601 })));
+    faux.setResponses(
+      Array.from({ length: 10 }, () =>
+        makeScheduleResponder({ kind: "once", in_minutes: 525_601 }),
+      ),
+    );
 
     const botId = await createBot(core);
     await core.handleRequest({
@@ -951,7 +1005,9 @@ describe("schedule_message bounds (item 5)", () => {
     const pad = (n: number) => n.toString().padStart(2, "0");
     const farAt = `${twoYears.getFullYear()}-${pad(twoYears.getMonth() + 1)}-${pad(twoYears.getDate())}T${pad(twoYears.getHours())}:${pad(twoYears.getMinutes())}`;
 
-    faux.setResponses(Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "once", at: farAt })));
+    faux.setResponses(
+      Array.from({ length: 10 }, () => makeScheduleResponder({ kind: "once", at: farAt })),
+    );
 
     const botId = await createBot(core);
     await core.handleRequest({
@@ -1136,9 +1192,9 @@ describe("(g) parseAtField unit tests", () => {
 
   it("rejects unsupported formats", () => {
     expect("error" in parseAtField("tomorrow", nowMs)).toBe(true);
-    expect("error" in parseAtField("2024-01-15", nowMs)).toBe(true);       // date only
+    expect("error" in parseAtField("2024-01-15", nowMs)).toBe(true); // date only
     expect("error" in parseAtField("2024-01-15 09:00", nowMs)).toBe(true); // space not T
-    expect("error" in parseAtField("09:00 AM", nowMs)).toBe(true);          // 12-hour format
+    expect("error" in parseAtField("09:00 AM", nowMs)).toBe(true); // 12-hour format
   });
 });
 
@@ -1181,14 +1237,20 @@ describe("cancel_schedule id type coercion", () => {
       if (last.role === "toolResult") return fauxAssistantMessage(fauxText("ok"));
       if (msgText(last).startsWith(CHECKIN_MARKER)) return fauxAssistantMessage(fauxText("hi"));
       return fauxAssistantMessage(
-        fauxToolCall("cancel_schedule", { id: numId }),  // number
+        fauxToolCall("cancel_schedule", { id: numId }), // number
         { stopReason: "toolUse" },
       );
     };
     faux.setResponses(Array.from({ length: 10 }, () => cancelResponder));
 
     const countBefore = completedCount(events, botId);
-    await core.handleRequest({ id: "cid-cn1", type: "bots.send", botId, text: "cancel", clientMessageId: "cm-cid-cn1" });
+    await core.handleRequest({
+      id: "cid-cn1",
+      type: "bots.send",
+      botId,
+      text: "cancel",
+      clientMessageId: "cm-cid-cn1",
+    });
     await waitFor(() => completedCount(events, botId) >= countBefore + 1, 8_000);
 
     const taskId = numId as unknown as TaskId<void>;
@@ -1214,14 +1276,20 @@ describe("cancel_schedule id type coercion", () => {
       if (last.role === "toolResult") return fauxAssistantMessage(fauxText("ok"));
       if (msgText(last).startsWith(CHECKIN_MARKER)) return fauxAssistantMessage(fauxText("hi"));
       return fauxAssistantMessage(
-        fauxToolCall("cancel_schedule", { id: scheduleId }),  // string → coerced to number
+        fauxToolCall("cancel_schedule", { id: scheduleId }), // string → coerced to number
         { stopReason: "toolUse" },
       );
     };
     faux.setResponses(Array.from({ length: 10 }, () => cancelResponder));
 
     const countBefore = completedCount(events, botId);
-    await core.handleRequest({ id: "cid-cs1", type: "bots.send", botId, text: "cancel", clientMessageId: "cm-cid-cs1" });
+    await core.handleRequest({
+      id: "cid-cs1",
+      type: "bots.send",
+      botId,
+      text: "cancel",
+      clientMessageId: "cm-cid-cs1",
+    });
     await waitFor(() => completedCount(events, botId) >= countBefore + 1, 8_000);
 
     const taskId = Number(scheduleId) as unknown as TaskId<void>;
@@ -1276,9 +1344,9 @@ describe("hello includes schedule tool names", () => {
 describe("checkInPrompt exact output", () => {
   it("produces the required format with CHECKIN_MARKER, id, what, rule, due, and now", () => {
     // Mon 12 Jan 2026, 09:00
-    const dueMs  = new Date(2026, 0, 12, 9, 0, 0, 0).getTime();
+    const dueMs = new Date(2026, 0, 12, 9, 0, 0, 0).getTime();
     // Mon 12 Jan 2026, 09:01
-    const nowMs  = new Date(2026, 0, 12, 9, 1, 0, 0).getTime();
+    const nowMs = new Date(2026, 0, 12, 9, 1, 0, 0).getTime();
 
     const result = checkInPrompt({
       scheduleId: "42",
@@ -1290,7 +1358,7 @@ describe("checkInPrompt exact output", () => {
 
     expect(result).toBe(
       '[Hydra check-in] Schedule #42 "say hi" (every 1 minute) is due at Mon 12 Jan 2026, 09:00. ' +
-      "It's now Mon 12 Jan 2026, 09:01. Do it now. If there's nothing worth telling the user, reply with exactly NO_REPLY.",
+        "It's now Mon 12 Jan 2026, 09:01. Do it now. If there's nothing worth telling the user, reply with exactly NO_REPLY.",
     );
 
     // Starts with the CHECKIN_MARKER constant

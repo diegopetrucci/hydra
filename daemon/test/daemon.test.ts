@@ -42,13 +42,27 @@ async function makeCore(storage: Storage = new MemoryStorage()): Promise<{
   // message_update / text_delta agent events fire during the response.
   const harness = await Harness.open(
     storage,
-    { models, registry: createRegistry(), settings: { progress: { partialIntervalMs: 100, outputIntervalMs: 100 } } },
+    {
+      models,
+      registry: createRegistry(),
+      settings: { progress: { partialIntervalMs: 100, outputIntervalMs: 100 } },
+    },
     ctx,
   );
   const events: ProtocolEvent[] = [];
   // enableIntro=false: existing tests do not queue an intro faux response;
   // turning it off prevents the intro from consuming queued faux replies.
-  const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, undefined, undefined, [], undefined, false);
+  const core = new DaemonCore(
+    harness,
+    models,
+    (ev) => events.push(ev),
+    ctx,
+    undefined,
+    undefined,
+    [],
+    undefined,
+    false,
+  );
   await core.start();
   return { core, events, faux, harness };
 }
@@ -122,9 +136,7 @@ describe("bots.create and bots.send – streamed events", () => {
     expect(sendRes).toMatchObject({ type: "result", result: { accepted: true } });
 
     await waitFor(() =>
-      events.some(
-        (e) => e.event === "message.completed" && "botId" in e && e.botId === botId,
-      ),
+      events.some((e) => e.event === "message.completed" && "botId" in e && e.botId === botId),
     );
 
     const deltas = events.filter(
@@ -184,11 +196,17 @@ describe("bots.create and bots.send – streamed events", () => {
 
     // Wait for message.completed.
     await waitFor(() =>
-      events.some((e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId),
+      events.some(
+        (e) =>
+          e.event === "message.completed" &&
+          "botId" in e &&
+          (e as { botId: string }).botId === botId,
+      ),
     );
 
     const completed = events.find(
-      (e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
+      (e) =>
+        e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
     ) as CompletedEvent;
 
     // Fetch history and check the durable id matches.
@@ -305,7 +323,11 @@ describe("persistence across reopens", () => {
     {
       const storage2 = await openNodeSqliteStorage(dbPath);
       const { models: models2 } = await createTestModels();
-      const harness2 = await Harness.open(storage2, { models: models2, registry: createRegistry() }, ctx);
+      const harness2 = await Harness.open(
+        storage2,
+        { models: models2, registry: createRegistry() },
+        ctx,
+      );
       const core2 = new DaemonCore(harness2, models2, () => {}, ctx);
       await core2.start();
 
@@ -483,7 +505,7 @@ describe("single-instance lock", () => {
   });
 });
 
-// 
+//
 
 describe("item 1 \ async handler errors preserve the request id", () => {
   it("error from a rejecting async handler carries the request id, not null", async () => {
@@ -527,7 +549,7 @@ describe("item 1 \ async handler errors preserve the request id", () => {
   });
 });
 
-// 
+//
 
 describe("item 5 \ credential store global serialisation across providers", () => {
   let tmpDir2: string;
@@ -571,7 +593,7 @@ describe("item 5 \ credential store global serialisation across providers", () =
   });
 });
 
-// 
+//
 
 describe("item 7 \ large response survives stdin-EOF flush", () => {
   it("bots.list result is fully returned for a large bot list (> 64 KB response)", async () => {
@@ -585,9 +607,7 @@ describe("item 7 \ large response survives stdin-EOF flush", () => {
     // Each bot needs a response so the harness doesn't get confused.
     const botCount = 60;
     faux.appendResponses(
-      Array.from({ length: botCount }, (_, i) =>
-        fauxAssistantMessage(fauxText(`Reply ${i}`)),
-      ),
+      Array.from({ length: botCount }, (_, i) => fauxAssistantMessage(fauxText(`Reply ${i}`))),
     );
 
     const botIds: string[] = [];
@@ -626,15 +646,27 @@ describe("re-review (a) \ transport fallback and fatal handler sanitize errors",
   });
 
   it("describeError omits a code that is not identifier-like (secret-bearing OAuth error)", () => {
-    const err = Object.assign(new Error("boom"), { code: "invalid_grant: refresh_token=sekret-123" });
+    const err = Object.assign(new Error("boom"), {
+      code: "invalid_grant: refresh_token=sekret-123",
+    });
     expect(describeError(err)).toBe("Error");
     expect(describeError(Object.assign(new Error("x"), { code: "a".repeat(41) }))).toBe("Error");
-    expect(describeError(Object.assign(new Error("x"), { code: "invalid_grant" }))).toBe("Error code=invalid_grant");
-    expect(describeError(Object.assign(new Error("x"), { code: "ENOENT" }))).toBe("Error code=ENOENT");
+    expect(describeError(Object.assign(new Error("x"), { code: "invalid_grant" }))).toBe(
+      "Error code=invalid_grant",
+    );
+    expect(describeError(Object.assign(new Error("x"), { code: "ENOENT" }))).toBe(
+      "Error code=ENOENT",
+    );
     // Identifier-shaped but not on the allowlist: omitted.
-    expect(describeError(Object.assign(new Error("x"), { code: "SENTINEL_PRIVATE_TOKEN_123" }))).toBe("Error");
-    expect(describeError(Object.assign(new Error("x"), { code: "sentinel_private_token_123" }))).toBe("Error");
-    expect(describeError(Object.assign(new Error("x"), { code: "sign_in_busy" }))).toBe("Error code=sign_in_busy");
+    expect(
+      describeError(Object.assign(new Error("x"), { code: "SENTINEL_PRIVATE_TOKEN_123" })),
+    ).toBe("Error");
+    expect(
+      describeError(Object.assign(new Error("x"), { code: "sentinel_private_token_123" })),
+    ).toBe("Error");
+    expect(describeError(Object.assign(new Error("x"), { code: "sign_in_busy" }))).toBe(
+      "Error code=sign_in_busy",
+    );
   });
 
   it("describeError includes code when present but not raw message", async () => {
@@ -653,7 +685,11 @@ describe("re-review (a) \ transport fallback and fatal handler sanitize errors",
     // stable-message pattern established by item 1 and re-confirmed here.
     const SENTINEL = "SENTINEL_TRANSPORT_rawmsg_xyz";
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const throwingStore = new InMemoryCredentialStore();
     throwingStore.modify = async () => {
       throw new Error(`Unexpected internal failure: secret=${SENTINEL}`);
@@ -661,7 +697,12 @@ describe("re-review (a) \ transport fallback and fatal handler sanitize errors",
     const core = new DaemonCore(harness, models, () => {}, ctx, throwingStore);
     await core.start();
 
-    const res = await core.handleRequest({ id: "t1", type: "auth.setApiKey", providerId: "anthropic", apiKey: "sk-x" });
+    const res = await core.handleRequest({
+      id: "t1",
+      type: "auth.setApiKey",
+      providerId: "anthropic",
+      apiKey: "sk-x",
+    });
     // The sentinel must not appear in the response that DaemonCore emits.
     expect(JSON.stringify(res)).not.toContain(SENTINEL);
     expect((res as { error?: { message: string } }).error?.message).not.toContain(SENTINEL);
@@ -713,8 +754,22 @@ describe("offered models (production provider)", () => {
   async function makeProdCore(): Promise<DaemonCore> {
     const { createModels } = await import("../src/models.js");
     const models = createModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
-    const core = new DaemonCore(harness, models, () => {}, ctx, undefined, undefined, [], undefined, false);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
+    const core = new DaemonCore(
+      harness,
+      models,
+      () => {},
+      ctx,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      false,
+    );
     await core.start();
     return core;
   }
@@ -724,7 +779,9 @@ describe("offered models (production provider)", () => {
     const res = (await core.handleRequest({ id: "1", type: "models.list" })) as {
       result: { provider: string; modelId: string; default: boolean }[];
     };
-    expect(res.result.map((m) => `${m.provider}/${m.modelId}`)).toEqual(["anthropic/claude-sonnet-5-5"]);
+    expect(res.result.map((m) => `${m.provider}/${m.modelId}`)).toEqual([
+      "anthropic/claude-sonnet-5-5",
+    ]);
     expect(res.result[0]?.default).toBe(true);
   });
 
@@ -738,7 +795,9 @@ describe("offered models (production provider)", () => {
     })) as { type: string; error?: { code: string } };
     expect(bad.type).toBe("error");
     expect(bad.error?.code).toBe("bad_request");
-    const good = (await core.handleRequest({ id: "3", type: "bots.create", name: "B" })) as { type: string };
+    const good = (await core.handleRequest({ id: "3", type: "bots.create", name: "B" })) as {
+      type: string;
+    };
     expect(good.type).toBe("result");
   });
 });

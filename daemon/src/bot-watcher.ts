@@ -11,7 +11,13 @@
 
 import type { Context } from "@earendil-works/chord";
 import { watchEvents } from "@earendil-works/pi-durable";
-import type { AgentEvent, AgentEventStream, Harness, JsonObject, WatchEnd } from "@earendil-works/pi-durable";
+import type {
+  AgentEvent,
+  AgentEventStream,
+  Harness,
+  JsonObject,
+  WatchEnd,
+} from "@earendil-works/pi-durable";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { CONNECTORS } from "./connectors.js";
@@ -221,17 +227,32 @@ export class BotWatcher {
       case "run_start": {
         // Reset the web-tools per-reply request budget before the run starts.
         this.onRunStart?.();
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "thinking" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "thinking",
+        } satisfies BotActivityEvent);
         break;
       }
 
       case "turn_start": {
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "thinking" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "thinking",
+        } satisfies BotActivityEvent);
         break;
       }
 
       case "run_end": {
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "idle" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "idle",
+        } satisfies BotActivityEvent);
         break;
       }
 
@@ -370,7 +391,11 @@ export class BotWatcher {
 
         const meta = this.getBot(this.convId);
         if (meta) {
-          const updated: StoredBotMeta = { ...meta, lastMessagePreview: preview, lastMessageAt: createdAt };
+          const updated: StoredBotMeta = {
+            ...meta,
+            lastMessagePreview: preview,
+            lastMessageAt: createdAt,
+          };
           this.emit({
             type: "event",
             event: "bot.updated",
@@ -395,13 +420,18 @@ export class BotWatcher {
 
       case "tool_execution_end": {
         // Return to thinking state; generation is still running.
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "thinking" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "thinking",
+        } satisfies BotActivityEvent);
         break;
       }
 
       case "task_failed": {
         // Classify the failure: an auth error gets code "auth_required"; everything
-        // else gets "generation_failed".  Never emit the raw upstream message 
+        // else gets "generation_failed".  Never emit the raw upstream message
         // (it may contain HTTP response bodies, URLs, or refresh tokens).
         // Classification is based on pi-ai ModelsError message patterns ("auth",
         // "oauth", "credential") and HTTP 401/403 indicators in the message text.

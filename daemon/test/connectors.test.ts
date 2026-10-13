@@ -52,9 +52,14 @@ const json = (body: unknown, status = 200): Response =>
 /** Fake OAuth endpoints. `tokenError` makes the token endpoint refuse. */
 function fakeFetch(opts: { tokenError?: string } = {}): McpFetch {
   return async (input) => {
-    const url = new URL(typeof input === "string" || input instanceof URL ? input : (input as Request).url);
+    const url = new URL(
+      typeof input === "string" || input instanceof URL ? input : (input as Request).url,
+    );
     if (url.pathname.includes("oauth-protected-resource")) {
-      return json({ resource: url.origin + url.pathname.replace("/.well-known/oauth-protected-resource", ""), authorization_servers: [AS] });
+      return json({
+        resource: url.origin + url.pathname.replace("/.well-known/oauth-protected-resource", ""),
+        authorization_servers: [AS],
+      });
     }
     if (url.pathname.includes("oauth-authorization-server")) {
       return json({
@@ -72,7 +77,12 @@ function fakeFetch(opts: { tokenError?: string } = {}): McpFetch {
     if (url.href === `${AS}/token`) {
       return opts.tokenError
         ? json({ error: opts.tokenError }, 400)
-        : json({ access_token: "new", token_type: "Bearer", refresh_token: "r2", expires_in: 3600 });
+        : json({
+            access_token: "new",
+            token_type: "Bearer",
+            refresh_token: "r2",
+            expires_in: 3600,
+          });
     }
     return new Response("nf", { status: 404 });
   };
@@ -90,7 +100,8 @@ class FakeServer {
     server.onMessage((m) => {
       const msg = m as { id?: number; method?: string; params?: { name?: string } };
       if (msg.id === undefined || !msg.method) return;
-      const respond = (result: unknown): void => this.reply?.({ jsonrpc: "2.0", id: msg.id!, result } as JsonRpcMessage);
+      const respond = (result: unknown): void =>
+        this.reply?.({ jsonrpc: "2.0", id: msg.id!, result } as JsonRpcMessage);
       if (msg.method === "initialize") {
         respond({
           protocolVersion: "2025-11-25",
@@ -124,7 +135,10 @@ class FlakyTransport implements McpTransport {
   onMessage = (l: Parameters<McpTransport["onMessage"]>[0]) => this.inner.onMessage(l);
   onError = (l: Parameters<McpTransport["onError"]>[0]) => this.inner.onError(l);
   onClose = (l: Parameters<McpTransport["onClose"]>[0]) => this.inner.onClose(l);
-  async send(message: JsonRpcMessage, options?: Parameters<McpTransport["send"]>[1]): Promise<void> {
+  async send(
+    message: JsonRpcMessage,
+    options?: Parameters<McpTransport["send"]>[1],
+  ): Promise<void> {
     if ((message as { method?: string }).method === "tools/call" && this.failures.length > 0) {
       throw this.failures.shift();
     }
@@ -148,7 +162,9 @@ interface Harnessed {
   startGate: Promise<void> | undefined;
   /** While set, the fake token exchange waits for it. */
   exchangeGate: Promise<void> | undefined;
-  callbackPending: { resolve: (cb: { code: string; state: string; iss: string }) => void } | undefined;
+  callbackPending:
+    | { resolve: (cb: { code: string; state: string; iss: string }) => void }
+    | undefined;
 }
 
 function updates(h: Harnessed, id = "sentry"): string[] {
@@ -168,8 +184,16 @@ describe("connectors", () => {
     const server = new FakeServer();
     const failures: Error[] = [];
     const state = {
-      dir, store, events, server, failures, transports: 0,
-      offline: false, failStarts: 0, startGate: undefined, exchangeGate: undefined,
+      dir,
+      store,
+      events,
+      server,
+      failures,
+      transports: 0,
+      offline: false,
+      failStarts: 0,
+      startGate: undefined,
+      exchangeGate: undefined,
       callbackPending: undefined as Harnessed["callbackPending"],
     } as Harnessed;
     const createTransport = (_def: ConnectorDef, auth: AuthProvider): McpTransport => {
@@ -204,7 +228,12 @@ describe("connectors", () => {
         // Stand-in for the token exchange; stores tokens like the real flow.
         void o;
         await state.exchangeGate;
-        await provider.saveTokens({ access_token: "tok", token_type: "Bearer", refresh_token: "ref", expires_in: 3600 });
+        await provider.saveTokens({
+          access_token: "tok",
+          token_type: "Bearer",
+          refresh_token: "ref",
+          expires_in: 3600,
+        });
       },
       listenCallback: async () => ({
         waitForCallback: (state_) =>
@@ -243,7 +272,9 @@ describe("connectors", () => {
   }
 
   function internals(): { client: unknown; opening: unknown } {
-    return (h.manager as unknown as { entries: Map<string, { client: unknown; opening: unknown }> }).entries.get("sentry")!;
+    return (
+      h.manager as unknown as { entries: Map<string, { client: unknown; opening: unknown }> }
+    ).entries.get("sentry")!;
   }
 
   // ─── Store ────────────────────────────────────────────────────────────────
@@ -267,7 +298,11 @@ describe("connectors", () => {
     await build();
     await writeFile(
       h.store.path,
-      JSON.stringify({ connectors: { sentry: { serverUrl: "https://a", tokens: { access_token: "t", token_type: "Bearer" } } } }),
+      JSON.stringify({
+        connectors: {
+          sentry: { serverUrl: "https://a", tokens: { access_token: "t", token_type: "Bearer" } },
+        },
+      }),
     );
     await chmod(h.store.path, 0o644);
     expect((await h.store.forConnector("sentry").load())?.serverUrl).toBe("https://a");
@@ -387,7 +422,9 @@ describe("connectors", () => {
     await h.manager.signIn("sentry");
     await waitFor(() => h.callbackPending !== undefined);
     h.callbackPending!.resolve({ code: "c", state: "", iss: "" });
-    await waitFor(() => h.events.some((e) => e.type === "event" && e.event === "connector.signInUrl"));
+    await waitFor(() =>
+      h.events.some((e) => e.type === "event" && e.event === "connector.signInUrl"),
+    );
     // The exchange is now blocked on the gate.
     await new Promise((r) => setImmediate(r));
     await h.manager.signOut("sentry");
@@ -411,7 +448,10 @@ describe("connectors", () => {
     await waitFor(() => h.transports === 1);
     await vi.advanceTimersByTimeAsync(5_000);
     await h.manager.settled();
-    expect(h.manager.list()[0]).toMatchObject({ status: "signed_out", error: expect.stringMatching(/timed out/) });
+    expect(h.manager.list()[0]).toMatchObject({
+      status: "signed_out",
+      error: expect.stringMatching(/timed out/),
+    });
     gate.resolve();
     await flush();
     expect(internals().client).toBeUndefined();
@@ -435,14 +475,20 @@ describe("connectors", () => {
 
   it("signIn: shutdown or sign-out while the callback server starts closes the handle", async () => {
     for (const action of ["close", "signOut"] as const) {
-      const listening = deferred<{ waitForCallback: () => Promise<never>; close: () => Promise<void> }>();
+      const listening = deferred<{
+        waitForCallback: () => Promise<never>;
+        close: () => Promise<void>;
+      }>();
       await build({ listenCallback: () => listening.promise });
       let closed = 0;
       const pending = h.manager.signIn("sentry");
       const rejected = expect(pending).rejects.toBeInstanceOf(ConnectorError);
       if (action === "close") await h.manager.close();
       else await h.manager.signOut("sentry");
-      listening.resolve({ waitForCallback: () => new Promise<never>(() => {}), close: async () => void closed++ });
+      listening.resolve({
+        waitForCallback: () => new Promise<never>(() => {}),
+        close: async () => void closed++,
+      });
       await rejected;
       expect(closed).toBe(1);
       expect(h.manager.list()[0]?.status).toBe("signed_out");
@@ -464,7 +510,10 @@ describe("connectors", () => {
     h.offline = true;
     await h.manager.start();
     await h.manager.settled();
-    expect(h.manager.list()[0]).toMatchObject({ status: "error", error: expect.stringContaining("Could not connect") });
+    expect(h.manager.list()[0]).toMatchObject({
+      status: "error",
+      error: expect.stringContaining("Could not connect"),
+    });
     expect(vi.getTimerCount()).toBe(1);
 
     await vi.advanceTimersByTimeAsync(4_999);
@@ -513,7 +562,10 @@ describe("connectors", () => {
     await h.manager.settled();
     const res = await h.manager.callTool("sentry", "ping", {});
     expect(res.content[0]).toMatchObject({ type: "text", text: "pong" });
-    h.server.tools = [...h.server.tools, { name: "pong", description: "p", inputSchema: { type: "object" as const } }];
+    h.server.tools = [
+      ...h.server.tools,
+      { name: "pong", description: "p", inputSchema: { type: "object" as const } },
+    ];
     h.server.notifyToolsChanged();
     await waitFor(() => h.manager.listTools("sentry").length === 2);
   });
@@ -535,7 +587,9 @@ describe("connectors", () => {
     await seedSignedIn();
     await h.manager.start();
     await h.manager.settled();
-    const entries = (h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }).entries;
+    const entries = (
+      h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }
+    ).entries;
     await entries.get("sentry")!.client!.close();
     h.failStarts = 2;
     let before = h.transports;
@@ -555,11 +609,17 @@ describe("connectors", () => {
     await h.manager.settled();
     h.server.dropResponses = true;
     const call = h.manager.callTool("sentry", "ping", {});
-    const outcome = call.then(() => "resolved", (e: unknown) => e);
+    const outcome = call.then(
+      () => "resolved",
+      (e: unknown) => e,
+    );
     await waitFor(() => h.server.calls.length === 1);
     // The connection drops after the mutation ran but before the response arrived.
-    await (h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> })
-      .entries.get("sentry")!.client!.close();
+    await (
+      h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }
+    ).entries
+      .get("sentry")!
+      .client!.close();
     expect(await outcome).not.toBe("resolved");
     await flush();
     expect(h.server.calls).toEqual(["ping"]);
@@ -594,10 +654,16 @@ describe("connectors", () => {
     await h.manager.settled();
     const before = h.transports;
     h.offline = true; // reopening fails with a transient TypeError, then sleeps
-    await (h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> })
-      .entries.get("sentry")!.client!.close();
+    await (
+      h.manager as unknown as { entries: Map<string, { client?: { close(): Promise<void> } }> }
+    ).entries
+      .get("sentry")!
+      .client!.close();
     const call = h.manager.callTool("sentry", "ping", {});
-    const outcome = call.then(() => "resolved", (e: unknown) => e);
+    const outcome = call.then(
+      () => "resolved",
+      (e: unknown) => e,
+    );
     await waitFor(() => h.transports === before + 1);
     await flush();
     h.offline = false;
@@ -623,11 +689,17 @@ describe("connectors", () => {
     const out = h.manager.signOut("sentry");
     // Cleanup is still pending, yet the connector is already fenced.
     expect(() => h.manager.listTools("sentry")).toThrow(ConnectorError);
-    await expect(h.manager.callTool("sentry", "ping", {})).rejects.toMatchObject({ code: "not_connected" });
+    await expect(h.manager.callTool("sentry", "ping", {})).rejects.toMatchObject({
+      code: "not_connected",
+    });
     gate.resolve();
     await out;
     expect(h.transports).toBe(before);
-    expect((h.manager as unknown as { entries: Map<string, { client?: unknown }> }).entries.get("sentry")!.client).toBeUndefined();
+    expect(
+      (h.manager as unknown as { entries: Map<string, { client?: unknown }> }).entries.get(
+        "sentry",
+      )!.client,
+    ).toBeUndefined();
   });
 
   it("a sign-in started during sign-out cleanup waits for it; new tokens and client survive", async () => {
@@ -658,7 +730,9 @@ describe("connectors", () => {
     const saved = JSON.parse(await readFile(h.store.path, "utf-8"));
     expect(saved.connectors.sentry.tokens.access_token).toBe("tok");
     expect(h.manager.listTools("sentry").map((t) => t.name)).toEqual(["ping"]);
-    const entry = (h.manager as unknown as { entries: Map<string, { client?: { connectionState: string } }> }).entries.get("sentry")!;
+    const entry = (
+      h.manager as unknown as { entries: Map<string, { client?: { connectionState: string } }> }
+    ).entries.get("sentry")!;
     expect(entry.client?.connectionState).toBe("connected");
   });
 
@@ -673,8 +747,16 @@ describe("connectors", () => {
         BACKGROUND_CONTEXT,
       );
       const core = new DaemonCore(
-        harness, models, (e) => h.events.push(e), BACKGROUND_CONTEXT,
-        undefined, undefined, [], undefined, false, h.manager,
+        harness,
+        models,
+        (e) => h.events.push(e),
+        BACKGROUND_CONTEXT,
+        undefined,
+        undefined,
+        [],
+        undefined,
+        false,
+        h.manager,
       );
       await core.start();
       return core;
@@ -698,11 +780,20 @@ describe("connectors", () => {
         ],
       });
 
-      expect(await core.handleRequest({ id: "2", type: "connectors.signIn" })).toMatchObject({ type: "error", error: { code: "bad_request" } });
-      expect(await core.handleRequest({ id: "3", type: "connectors.signIn", connectorId: "figma" })).toMatchObject({ error: { code: "unknown_connector" } });
+      expect(await core.handleRequest({ id: "2", type: "connectors.signIn" })).toMatchObject({
+        type: "error",
+        error: { code: "bad_request" },
+      });
+      expect(
+        await core.handleRequest({ id: "3", type: "connectors.signIn", connectorId: "figma" }),
+      ).toMatchObject({ error: { code: "unknown_connector" } });
 
-      expect(await core.handleRequest({ id: "4", type: "connectors.signOut", connectorId: "sentry" })).toEqual({
-        id: "4", type: "result", result: { signedOut: true },
+      expect(
+        await core.handleRequest({ id: "4", type: "connectors.signOut", connectorId: "sentry" }),
+      ).toEqual({
+        id: "4",
+        type: "result",
+        result: { signedOut: true },
       });
       expect(h.manager.list()[0]?.status).toBe("signed_out");
       expect(await h.store.signedInIds()).toEqual([]);
@@ -711,10 +802,16 @@ describe("connectors", () => {
     it("connectors.signIn accepts, then reports a busy sign-in", async () => {
       await build();
       const core = await makeCore();
-      expect(await core.handleRequest({ id: "1", type: "connectors.signIn", connectorId: "sentry" })).toEqual({
-        id: "1", type: "result", result: { accepted: true },
+      expect(
+        await core.handleRequest({ id: "1", type: "connectors.signIn", connectorId: "sentry" }),
+      ).toEqual({
+        id: "1",
+        type: "result",
+        result: { accepted: true },
       });
-      expect(await core.handleRequest({ id: "2", type: "connectors.signIn", connectorId: "notion" })).toMatchObject({
+      expect(
+        await core.handleRequest({ id: "2", type: "connectors.signIn", connectorId: "notion" }),
+      ).toMatchObject({
         error: { code: "sign_in_busy" },
       });
     });
@@ -726,16 +823,26 @@ describe("connectors", () => {
         },
       });
       const core = await makeCore();
-      const res = await core.handleRequest({ id: "1", type: "connectors.signIn", connectorId: "sentry" });
+      const res = await core.handleRequest({
+        id: "1",
+        type: "connectors.signIn",
+        connectorId: "sentry",
+      });
       expect(res).toMatchObject({ error: { code: "port_busy" } });
       expect(h.manager.list()[0]?.status).toBe("signed_out");
     });
 
     it("without a manager the commands report unavailable", async () => {
       const { models } = await createTestModels();
-      const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, BACKGROUND_CONTEXT);
+      const harness = await Harness.open(
+        new MemoryStorage(),
+        { models, registry: createRegistry() },
+        BACKGROUND_CONTEXT,
+      );
       const core = new DaemonCore(harness, models, () => {}, BACKGROUND_CONTEXT);
-      expect(await core.handleRequest({ id: "1", type: "connectors.list" })).toMatchObject({ error: { code: "unavailable" } });
+      expect(await core.handleRequest({ id: "1", type: "connectors.list" })).toMatchObject({
+        error: { code: "unavailable" },
+      });
     });
   });
 

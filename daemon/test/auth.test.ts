@@ -40,14 +40,7 @@ async function makeCoreWithAuth(
     ctx,
   );
   const events: ProtocolEvent[] = [];
-  const core = new DaemonCore(
-    harness,
-    models,
-    (ev) => events.push(ev),
-    ctx,
-    credStore,
-    loginFn,
-  );
+  const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, credStore, loginFn);
   await core.start();
   return { core, events };
 }
@@ -233,7 +226,9 @@ describe("FileCredentialStore", () => {
       process.stderr.write = origStderrWrite;
     }
 
-    const corrupt = (await readdir(tmpDir)).filter((e) => e.startsWith("credentials.json.corrupt-"));
+    const corrupt = (await readdir(tmpDir)).filter((e) =>
+      e.startsWith("credentials.json.corrupt-"),
+    );
     expect(corrupt.length).toBe(1);
     expect((await stat(join(tmpDir, corrupt[0]!))).mode & 0o777).toBe(0o600);
   });
@@ -362,7 +357,11 @@ describe("OAuth login sequencing", () => {
       interaction: AuthInteraction,
     ): Promise<Credential> => {
       // Notify the URL (daemon must NOT open it; just emit the event).
-      interaction.notify({ type: "auth_url", url: "https://example.com/oauth/test", instructions: "Open this URL" });
+      interaction.notify({
+        type: "auth_url",
+        url: "https://example.com/oauth/test",
+        instructions: "Open this URL",
+      });
       // Ask for a code.
       const code = await interaction.prompt({ type: "text", message: "Enter the code" });
       if (code !== "correct-code") throw new Error("Bad code");
@@ -370,12 +369,20 @@ describe("OAuth login sequencing", () => {
     };
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
     // Start login.
-    const loginRes = await core.handleRequest({ id: "l1", type: "auth.login", providerId: "anthropic" });
+    const loginRes = await core.handleRequest({
+      id: "l1",
+      type: "auth.login",
+      providerId: "anthropic",
+    });
     expect(loginRes).toMatchObject({ type: "result" });
     const loginId = (loginRes as { result: { loginId: string } }).result.loginId;
     expect(typeof loginId).toBe("string");
@@ -426,19 +433,25 @@ describe("OAuth login sequencing", () => {
       // Wait indefinitely (will be cancelled).
       await new Promise<string>((_res, rej) => {
         promptReject = rej;
-        interaction
-          .prompt({ type: "text", message: "Waiting..." })
-          .then(_res, rej);
+        interaction.prompt({ type: "text", message: "Waiting..." }).then(_res, rej);
       });
       return { type: "oauth", refresh: "r", access: "a", expires: 0 };
     };
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
-    const loginRes = await core.handleRequest({ id: "c1", type: "auth.login", providerId: "anthropic" });
+    const loginRes = await core.handleRequest({
+      id: "c1",
+      type: "auth.login",
+      providerId: "anthropic",
+    });
     const loginId = (loginRes as { result: { loginId: string } }).result.loginId;
 
     // Wait for auth.url so we know the flow has started.
@@ -475,11 +488,19 @@ describe("OAuth login sequencing", () => {
     };
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
-    const loginRes = await core.handleRequest({ id: "f1", type: "auth.login", providerId: "anthropic" });
+    const loginRes = await core.handleRequest({
+      id: "f1",
+      type: "auth.login",
+      providerId: "anthropic",
+    });
     const loginId = (loginRes as { result: { loginId: string } }).result.loginId;
 
     await waitFor(() => events.some((e) => e.event === "auth.failed"));
@@ -509,7 +530,11 @@ describe("OAuth login sequencing", () => {
     };
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
@@ -602,7 +627,7 @@ describe("bots.send auth pre-check", () => {
   });
 });
 
-// 
+//
 
 describe("item 3 – auth.failed sanitisation", () => {
   it("ModelsError oauth surfaces as stable message, sentinel secret absent from events", async () => {
@@ -620,7 +645,11 @@ describe("item 3 – auth.failed sanitisation", () => {
     };
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
@@ -644,14 +673,15 @@ describe("item 3 – auth.failed sanitisation", () => {
     const SENTINEL = "SENTINEL_AUTH_SECRET_sk_live_xyzabc";
 
     const stubLogin: LoginFn = async (): Promise<Credential> => {
-      throw new ModelsError(
-        "auth",
-        `API key auth failed: key=${SENTINEL}`,
-      );
+      throw new ModelsError("auth", `API key auth failed: key=${SENTINEL}`);
     };
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
@@ -661,12 +691,14 @@ describe("item 3 – auth.failed sanitisation", () => {
     const failedEvent = events.find((e) => e.event === "auth.failed") as
       | { message: string }
       | undefined;
-    expect(failedEvent?.message).toBe("Authentication failed. Check your credentials and try again.");
+    expect(failedEvent?.message).toBe(
+      "Authentication failed. Check your credentials and try again.",
+    );
     expect(JSON.stringify(events)).not.toContain(SENTINEL);
   });
 });
 
-// 
+//
 
 describe("item 4 \ login session: silence after auth.cancel", () => {
   it("a promise that resolves after cancel emits nothing beyond the cancel's auth.failed", async () => {
@@ -675,14 +707,24 @@ describe("item 4 \ login session: silence after auth.cancel", () => {
     let resolveLogin!: (cred: Credential) => void;
 
     const stubLogin: LoginFn = (_p, _t, _interaction): Promise<Credential> =>
-      new Promise<Credential>((resolve) => { resolveLogin = resolve; });
+      new Promise<Credential>((resolve) => {
+        resolveLogin = resolve;
+      });
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
-    const loginRes = await core.handleRequest({ id: "L1", type: "auth.login", providerId: "anthropic" });
+    const loginRes = await core.handleRequest({
+      id: "L1",
+      type: "auth.login",
+      providerId: "anthropic",
+    });
     const loginId = (loginRes as { result: { loginId: string } }).result.loginId;
 
     // Cancel the login.
@@ -709,14 +751,24 @@ describe("item 4 \ login session: silence after auth.cancel", () => {
     let rejectLogin!: (err: Error) => void;
 
     const stubLogin: LoginFn = (_p, _t, _interaction): Promise<Credential> =>
-      new Promise<Credential>((_, reject) => { rejectLogin = reject; });
+      new Promise<Credential>((_, reject) => {
+        rejectLogin = reject;
+      });
 
     const { models } = await createTestModels();
-    const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, ctx);
+    const harness = await Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry() },
+      ctx,
+    );
     const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, store, stubLogin);
     await core.start();
 
-    const loginRes = await core.handleRequest({ id: "R1", type: "auth.login", providerId: "anthropic" });
+    const loginRes = await core.handleRequest({
+      id: "R1",
+      type: "auth.login",
+      providerId: "anthropic",
+    });
     const loginId = (loginRes as { result: { loginId: string } }).result.loginId;
 
     await core.handleRequest({ id: "R2", type: "auth.cancel", loginId });
@@ -736,14 +788,18 @@ describe("item 4 \ login session: silence after auth.cancel", () => {
   });
 });
 
-// 
+//
 
 describe("re-review (c) \ notify and prompt emit nothing for a cancelled/removed session", () => {
   it("notify does not emit any event after the session has been cancelled", async () => {
     const events: ProtocolEvent[] = [];
     let capturedNotify: ((event: import("@earendil-works/pi-ai").AuthEvent) => void) | undefined;
 
-    const stubLogin: LoginFn = (_p, _t, interaction): Promise<import("@earendil-works/pi-ai").Credential> => {
+    const stubLogin: LoginFn = (
+      _p,
+      _t,
+      interaction,
+    ): Promise<import("@earendil-works/pi-ai").Credential> => {
       capturedNotify = interaction.notify;
       // Never settles; the session will be cancelled externally.
       return new Promise<import("@earendil-works/pi-ai").Credential>(() => {});
@@ -761,7 +817,11 @@ describe("re-review (c) \ notify and prompt emit nothing for a cancelled/removed
     const eventsAfterCancel = events.length;
 
     // Now fire notify – the session is gone; no event must be emitted.
-    capturedNotify!({ type: "auth_url", url: "https://example.com/oauth/late", instructions: "Open" });
+    capturedNotify!({
+      type: "auth_url",
+      url: "https://example.com/oauth/late",
+      instructions: "Open",
+    });
 
     // Give microtasks time to settle.
     await new Promise<void>((r) => setTimeout(r, 20));
@@ -776,7 +836,11 @@ describe("re-review (c) \ notify and prompt emit nothing for a cancelled/removed
       | ((prompt: import("@earendil-works/pi-ai").AuthPrompt) => Promise<string>)
       | undefined;
 
-    const stubLogin: LoginFn = (_p, _t, interaction): Promise<import("@earendil-works/pi-ai").Credential> => {
+    const stubLogin: LoginFn = (
+      _p,
+      _t,
+      interaction,
+    ): Promise<import("@earendil-works/pi-ai").Credential> => {
       capturedPrompt = interaction.prompt;
       return new Promise<import("@earendil-works/pi-ai").Credential>(() => {});
     };
@@ -811,11 +875,17 @@ describe("nb-r5wv \ AuthManager.cancelAll cancels active sessions silently", () 
     const events: ProtocolEvent[] = [];
     let capturedSignal: AbortSignal | undefined;
 
-    const stubLogin: LoginFn = (_p, _t, interaction): Promise<import("@earendil-works/pi-ai").Credential> => {
+    const stubLogin: LoginFn = (
+      _p,
+      _t,
+      interaction,
+    ): Promise<import("@earendil-works/pi-ai").Credential> => {
       capturedSignal = interaction.signal!;
       // Never resolves – waits on the signal.
       return new Promise<import("@earendil-works/pi-ai").Credential>((_resolve, reject) => {
-        interaction.signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        interaction.signal!.addEventListener("abort", () => reject(new Error("aborted")), {
+          once: true,
+        });
       });
     };
 
@@ -836,10 +906,16 @@ describe("nb-r5wv \ AuthManager.cancelAll cancels active sessions silently", () 
   it("cancelAll emits no events", async () => {
     const events: ProtocolEvent[] = [];
 
-    const stubLogin: LoginFn = (_p, _t, interaction): Promise<import("@earendil-works/pi-ai").Credential> =>
+    const stubLogin: LoginFn = (
+      _p,
+      _t,
+      interaction,
+    ): Promise<import("@earendil-works/pi-ai").Credential> =>
       // Waits indefinitely; will be aborted by cancelAll.
       new Promise<import("@earendil-works/pi-ai").Credential>((_resolve, reject) => {
-        interaction.signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        interaction.signal!.addEventListener("abort", () => reject(new Error("aborted")), {
+          once: true,
+        });
       });
 
     const manager = new AuthManager(stubLogin, (ev) => events.push(ev));
@@ -861,7 +937,11 @@ describe("nb-r5wv \ AuthManager.cancelAll cancels active sessions silently", () 
     const events: ProtocolEvent[] = [];
     let capturedInteraction: import("@earendil-works/pi-ai").AuthInteraction | undefined;
 
-    const stubLogin: LoginFn = (_p, _t, interaction): Promise<import("@earendil-works/pi-ai").Credential> => {
+    const stubLogin: LoginFn = (
+      _p,
+      _t,
+      interaction,
+    ): Promise<import("@earendil-works/pi-ai").Credential> => {
       capturedInteraction = interaction;
       // Issue a prompt so session.pendingPrompt is set.
       return interaction.prompt({ type: "text", message: "Enter code" }).then(() => {
@@ -892,10 +972,16 @@ describe("nb-r5wv \ AuthManager.cancelAll cancels active sessions silently", () 
     const events: ProtocolEvent[] = [];
     let capturedSignal: AbortSignal | undefined;
 
-    const stubLogin: LoginFn = (_p, _t, interaction): Promise<import("@earendil-works/pi-ai").Credential> => {
+    const stubLogin: LoginFn = (
+      _p,
+      _t,
+      interaction,
+    ): Promise<import("@earendil-works/pi-ai").Credential> => {
       capturedSignal = interaction.signal!;
       return new Promise<import("@earendil-works/pi-ai").Credential>((_resolve, reject) => {
-        interaction.signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        interaction.signal!.addEventListener("abort", () => reject(new Error("aborted")), {
+          once: true,
+        });
       });
     };
 

@@ -56,8 +56,16 @@ export type AuthLogoutRequest = { id: string; type: "auth.logout"; providerId: s
 // ─── Connector requests ──────────────────────────────────────────────────────
 
 export type ConnectorsListRequest = { id: string; type: "connectors.list" };
-export type ConnectorsSignInRequest = { id: string; type: "connectors.signIn"; connectorId: string };
-export type ConnectorsSignOutRequest = { id: string; type: "connectors.signOut"; connectorId: string };
+export type ConnectorsSignInRequest = {
+  id: string;
+  type: "connectors.signIn";
+  connectorId: string;
+};
+export type ConnectorsSignOutRequest = {
+  id: string;
+  type: "connectors.signOut";
+  connectorId: string;
+};
 
 export type Request =
   | HelloRequest

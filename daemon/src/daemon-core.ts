@@ -19,13 +19,7 @@ import { DEFAULT_MODEL_ID, DEFAULT_PROVIDER, isOfferedModel } from "./models.js"
 import { NO_REPLY, introPrompt } from "./system-prompt.js";
 import { HYDRA_MARKER_PREFIX } from "./schedules.js";
 import { describeError } from "./describe-error.js";
-import {
-  DAEMON_VERSION,
-  PROTOCOL_VERSION,
-  err,
-  ok,
-  parseModelRef,
-} from "./protocol.js";
+import { DAEMON_VERSION, PROTOCOL_VERSION, err, ok, parseModelRef } from "./protocol.js";
 import type {
   AuthCancelRequest,
   AuthLoginRequest,
@@ -90,8 +84,7 @@ export class DaemonCore {
     private readonly connectors?: ConnectorManager,
   ) {
     this.credentials = credentials ?? new InMemoryCredentialStore();
-    const effectiveLoginFn: LoginFn =
-      loginFn ?? ((p, t, i) => this.piModels.login(p, t, i));
+    const effectiveLoginFn: LoginFn = loginFn ?? ((p, t, i) => this.piModels.login(p, t, i));
     this.authManager = new AuthManager(effectiveLoginFn, emitFn);
   }
 
@@ -208,12 +201,14 @@ export class DaemonCore {
 
   private cmdModelsList(id: string): OkResponse<unknown> {
     const allModels = this.piModels.getModels();
-    const result = allModels.filter((m) => isOfferedModel(m.provider, m.id)).map((m) => ({
-      provider: m.provider,
-      modelId: m.id,
-      name: m.name,
-      default: m.provider === DEFAULT_PROVIDER && m.id === DEFAULT_MODEL_ID,
-    }));
+    const result = allModels
+      .filter((m) => isOfferedModel(m.provider, m.id))
+      .map((m) => ({
+        provider: m.provider,
+        modelId: m.id,
+        name: m.name,
+        default: m.provider === DEFAULT_PROVIDER && m.id === DEFAULT_MODEL_ID,
+      }));
     return ok(id, result);
   }
 
@@ -236,12 +231,20 @@ export class DaemonCore {
     if (req.model) {
       const ref = parseModelRef(req.model);
       if (!ref) {
-        return err(id, "bad_request", `Invalid model reference: "${req.model}". Use "provider/modelId".`);
+        return err(
+          id,
+          "bad_request",
+          `Invalid model reference: "${req.model}". Use "provider/modelId".`,
+        );
       }
       provider = ref.provider;
       modelId = ref.modelId;
       if (!isOfferedModel(provider, modelId)) {
-        return err(id, "bad_request", `Model "${req.model}" is not offered. Available: anthropic/${DEFAULT_MODEL_ID}.`);
+        return err(
+          id,
+          "bad_request",
+          `Model "${req.model}" is not offered. Available: anthropic/${DEFAULT_MODEL_ID}.`,
+        );
       }
     }
 
@@ -439,10 +442,7 @@ export class DaemonCore {
     return ok(id, { providers });
   }
 
-  private cmdAuthLogin(
-    id: string,
-    req: AuthLoginRequest,
-  ): OkResponse<unknown> | ErrResponse {
+  private cmdAuthLogin(id: string, req: AuthLoginRequest): OkResponse<unknown> | ErrResponse {
     const { providerId, loginType = "oauth" } = req;
     if (!providerId || typeof providerId !== "string") {
       return err(id, "bad_request", "providerId is required");
@@ -454,10 +454,7 @@ export class DaemonCore {
     return ok(id, { loginId });
   }
 
-  private cmdAuthRespond(
-    id: string,
-    req: AuthRespondRequest,
-  ): OkResponse<unknown> | ErrResponse {
+  private cmdAuthRespond(id: string, req: AuthRespondRequest): OkResponse<unknown> | ErrResponse {
     const { loginId, promptId, value } = req;
     if (!loginId || !promptId || typeof value !== "string") {
       return err(id, "bad_request", "loginId, promptId, and value are required");
@@ -473,10 +470,7 @@ export class DaemonCore {
     return ok(id, { accepted: true });
   }
 
-  private cmdAuthCancel(
-    id: string,
-    req: AuthCancelRequest,
-  ): OkResponse<unknown> | ErrResponse {
+  private cmdAuthCancel(id: string, req: AuthCancelRequest): OkResponse<unknown> | ErrResponse {
     const { loginId } = req;
     if (!loginId) return err(id, "bad_request", "loginId is required");
     const cancelled = this.authManager.cancel(loginId);

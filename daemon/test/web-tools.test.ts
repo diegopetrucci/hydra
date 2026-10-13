@@ -22,9 +22,7 @@ beforeAll(() => {
   savedFetch = globalThis.fetch;
   // Fail loudly if any test unexpectedly reaches the network.
   globalThis.fetch = ((): never => {
-    throw new Error(
-      "Unexpected real network call in web-tools tests – stub the transport instead",
-    );
+    throw new Error("Unexpected real network call in web-tools tests – stub the transport instead");
   }) as unknown as typeof globalThis.fetch;
 });
 
@@ -53,9 +51,7 @@ describe("web-tools extension registration", () => {
     const section = webToolsExtension.sections?.[0];
     expect(section).toBeDefined();
     const rendered =
-      typeof section?.render === "function"
-        ? (section.render as () => string)()
-        : undefined;
+      typeof section?.render === "function" ? (section.render as () => string)() : undefined;
     expect(rendered).toMatch(/untrusted/i);
   });
 
@@ -99,9 +95,9 @@ describe("computeToolLabel – activity label generation", () => {
   });
 
   it("fetch_content with a single url → 'Reading <host>'", () => {
-    expect(
-      computeToolLabel("fetch_content", { url: "https://example.com/some/path?q=1" }),
-    ).toBe("Reading example.com");
+    expect(computeToolLabel("fetch_content", { url: "https://example.com/some/path?q=1" })).toBe(
+      "Reading example.com",
+    );
   });
 
   it("fetch_content with a urls array of 1 → 'Reading <host>'", () => {
@@ -173,9 +169,11 @@ describe("budget reset per reply", () => {
     );
 
     // Access private handleEvent via unknown cast.
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     // Fire two run_start events to verify the counter increments correctly.
     await handleEvent({ type: "run_start", inputs: [] }, "42");
@@ -185,8 +183,9 @@ describe("budget reset per reply", () => {
 
     // Verify the thinking activity event is still emitted.
     const thinkingEvents = emitted.filter(
-      (e) => (e as { event?: string }).event === "bot.activity" &&
-              (e as { activity?: string }).activity === "thinking",
+      (e) =>
+        (e as { event?: string }).event === "bot.activity" &&
+        (e as { activity?: string }).activity === "thinking",
     );
     expect(thinkingEvents.length).toBe(2);
   });
@@ -209,9 +208,11 @@ describe("budget reset per reply", () => {
       },
     );
 
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     await handleEvent({ type: "turn_start" }, "1");
     expect(runStartCallCount).toBe(0);
@@ -236,12 +237,19 @@ describe("tool_execution_start activity event", () => {
       BACKGROUND_CONTEXT,
     );
 
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     await handleEvent(
-      { type: "tool_execution_start", toolCallId: "c1", toolName: "web_search", args: { query: "TypeScript" } },
+      {
+        type: "tool_execution_start",
+        toolCallId: "c1",
+        toolName: "web_search",
+        args: { query: "TypeScript" },
+      },
       "7",
     );
 
@@ -272,9 +280,11 @@ describe("tool_execution_start activity event", () => {
       BACKGROUND_CONTEXT,
     );
 
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     await handleEvent(
       {
@@ -291,7 +301,7 @@ describe("tool_execution_start activity event", () => {
   });
 });
 
-// 
+//
 
 describe("item 2 \ task_failed auth classification", () => {
   it("auth error message is classified as auth_required; bot.activity idle is emitted", async () => {
@@ -307,13 +317,20 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     // Simulate a task_failed with an auth error message from pi-ai resolve.js.
     await handleEvent(
-      { type: "task_failed", taskId: 1, kind: "pi.generation", message: "API key auth failed for provider anthropic" },
+      {
+        type: "task_failed",
+        taskId: 1,
+        kind: "pi.generation",
+        message: "API key auth failed for provider anthropic",
+      },
       "99",
     );
 
@@ -325,8 +342,9 @@ describe("item 2 \ task_failed auth classification", () => {
 
     // bot.activity idle must be emitted after the error.
     const idleEvent = emitted.find(
-      (e) => (e as { event?: string }).event === "bot.activity" &&
-             (e as { activity?: string }).activity === "idle",
+      (e) =>
+        (e as { event?: string }).event === "bot.activity" &&
+        (e as { activity?: string }).activity === "idle",
     );
     expect(idleEvent).toBeDefined();
   });
@@ -344,12 +362,19 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     await handleEvent(
-      { type: "task_failed", taskId: 2, kind: "pi.generation", message: "OAuth refresh failed for anthropic" },
+      {
+        type: "task_failed",
+        taskId: 2,
+        kind: "pi.generation",
+        message: "OAuth refresh failed for anthropic",
+      },
       "100",
     );
 
@@ -372,9 +397,11 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     await handleEvent(
       { type: "task_failed", taskId: 3, kind: "pi.generation", message: "Context window exceeded" },
@@ -391,8 +418,9 @@ describe("item 2 \ task_failed auth classification", () => {
 
     // bot.activity idle is emitted after any task_failed.
     const idleEvent = emitted.find(
-      (e) => (e as { event?: string }).event === "bot.activity" &&
-             (e as { activity?: string }).activity === "idle",
+      (e) =>
+        (e as { event?: string }).event === "bot.activity" &&
+        (e as { activity?: string }).activity === "idle",
     );
     expect(idleEvent).toBeDefined();
   });
@@ -411,9 +439,11 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = (
+      watcher as unknown as {
+        handleEvent: (ev: unknown, botId: string) => Promise<void>;
+      }
+    ).handleEvent.bind(watcher);
 
     // Simulate a task_failed whose message contains a raw upstream secret.
     await handleEvent(
@@ -431,7 +461,7 @@ describe("item 2 \ task_failed auth classification", () => {
   });
 });
 
-// 
+//
 
 describe("isTaskFailedAuthError classification", () => {
   it.each([

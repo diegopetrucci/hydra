@@ -20,11 +20,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Harness, MemoryStorage, createRegistry } from "@earendil-works/pi-durable";
-import {
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createTestModels } from "../src/models.js";
 import { DaemonCore } from "../src/daemon-core.js";
 import { buildWebToolsExtensionForTest } from "../src/web-tools.js";
@@ -154,10 +150,9 @@ describe("item 8 – faux tool call through real harness and web-tools adapter",
     // Response 1: tool call (web_search).
     // Response 2: text reply after the tool result.
     faux.setResponses([
-      fauxAssistantMessage(
-        fauxToolCall("web_search", { query: "TypeScript async patterns" }),
-        { stopReason: "toolUse" },
-      ),
+      fauxAssistantMessage(fauxToolCall("web_search", { query: "TypeScript async patterns" }), {
+        stopReason: "toolUse",
+      }),
       fauxAssistantMessage(fauxText("TypeScript async/await is great.")),
     ]);
 
@@ -190,7 +185,7 @@ describe("item 8 – faux tool call through real harness and web-tools adapter",
           "botId" in e &&
           (e as { botId: string }).botId === botId &&
           typeof (e as { message?: { text?: string } }).message?.text === "string" &&
-          ((e as { message: { text: string } }).message.text.length > 0),
+          (e as { message: { text: string } }).message.text.length > 0,
       ),
     );
 
@@ -216,7 +211,7 @@ describe("item 8 – faux tool call through real harness and web-tools adapter",
         "botId" in e &&
         (e as { botId: string }).botId === botId &&
         typeof (e as { message?: { text?: string } }).message?.text === "string" &&
-        ((e as { message: { text: string } }).message.text.length > 0),
+        (e as { message: { text: string } }).message.text.length > 0,
     ) as { message: { text: string } } | undefined;
     expect(completed?.message.text).toContain("TypeScript");
 
