@@ -705,4 +705,55 @@ struct ChatFeatureTests {
             $0.messages = [optimisticMsg]
         }
     }
+
+    // MARK: - History merge: repeated text
+
+    private func mergeRepeated(
+        pending: ChatMessage,
+        history: [Message],
+        expected: [ChatMessage]
+    ) async {
+        var initialState = ChatFeature.State(botID: "1", botName: "Helper")
+        initialState.messages = [pending]
+        initialState.isHistoryLoading = true
+        let store = TestStore(initialState: initialState) {
+            ChatFeature()
+        } withDependencies: {
+            $0.date.now = fixedDate
+            $0.uuid = .incrementing
+        }
+        await store.send(.historyLoaded(botID: "1", messages: history)) {
+            $0.isHistoryLoading = false
+            $0.messages = IdentifiedArray(uniqueElements: expected)
+        }
+    }
+
+    @Test("historyLoaded keeps optimistic bubble when only an older identical message exists")
+    func historyLoadedKeepsOptimisticWithOlderIdentical() async {
+        let pending = ChatMessage.optimistic(
+            clientMessageID: "00000000-0000-0000-0000-000000000030", text: "yes", now: fixedDate)
+        let old = Message(id: "10", role: "user", text: "yes", createdAt: fixedDate.addingTimeInterval(-60))
+        await mergeRepeated(pending: pending, history: [old], expected: [ChatMessage.from(old), pending])
+    }
+
+    @Test("historyLoaded keeps failed bubble when only an older identical message exists")
+    func historyLoadedKeepsFailedWithOlderIdentical() async {
+        var pending = ChatMessage.optimistic(
+            clientMessageID: "00000000-0000-0000-0000-000000000031", text: "yes", now: fixedDate)
+        pending.kind = .failed(
+            clientMessageID: "00000000-0000-0000-0000-000000000031", reason: "offline")
+        let old = Message(id: "10", role: "user", text: "yes", createdAt: fixedDate.addingTimeInterval(-60))
+        await mergeRepeated(pending: pending, history: [old], expected: [ChatMessage.from(old), pending])
+    }
+
+    @Test("historyLoaded replaces optimistic bubble with committed copy stamped after it")
+    func historyLoadedReplacesWithNewerCommitted() async {
+        let pending = ChatMessage.optimistic(
+            clientMessageID: "00000000-0000-0000-0000-000000000032", text: "yes", now: fixedDate)
+        let old = Message(id: "10", role: "user", text: "yes", createdAt: fixedDate.addingTimeInterval(-60))
+        let committed = Message(id: "11", role: "user", text: "yes", createdAt: fixedDate.addingTimeInterval(0.2))
+        await mergeRepeated(
+            pending: pending, history: [old, committed],
+            expected: [ChatMessage.from(old), ChatMessage.from(committed)])
+    }
 }
