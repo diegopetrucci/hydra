@@ -11,8 +11,8 @@
  * spike limitation: concurrent bots contend for the same 6-request budget.
  */
 
-import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { ensurePrivateDir } from "./private-dir.js";
 import { defineExtension, section } from "@earendil-works/pi-durable";
 import type {
   Extension,
@@ -167,7 +167,7 @@ export const WEB_TOOL_NAMES: readonly string[] = _ext.tools?.map((t) => t.name) 
 export function ensureWebAccessDir(dataDir: string): void {
   if (!process.env["PI_CODING_AGENT_DIR"]) {
     const webAccessDir = join(dataDir, "web-access");
-    mkdirSync(webAccessDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(webAccessDir);
     process.env["PI_CODING_AGENT_DIR"] = webAccessDir;
   }
 }

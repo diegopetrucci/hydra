@@ -240,7 +240,10 @@ export class DaemonCore {
       }
       provider = ref.provider;
       modelId = ref.modelId;
-      if (!isOfferedModel(provider, modelId)) {
+      const registered = this.piModels
+        .getModels()
+        .some((m) => m.provider === provider && m.id === modelId);
+      if (!registered || !isOfferedModel(provider, modelId)) {
         return err(
           id,
           "bad_request",

@@ -14,11 +14,11 @@
  */
 
 import { createInterface } from "node:readline";
-import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createRegistry, Harness } from "@earendil-works/pi-durable";
+import { ensurePrivateDir } from "./private-dir.js";
 import { createShutdown } from "./shutdown.js";
 import { exitOnSessionFailure } from "./session-failure.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -50,9 +50,7 @@ function resolveDataDir(): string {
 }
 
 function ensureDataDir(dir: string): void {
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
+  ensurePrivateDir(dir);
 }
 
 function writeStdout(obj: unknown): void {

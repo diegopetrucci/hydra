@@ -465,7 +465,11 @@ actor DaemonController {
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             logDir = base.appendingPathComponent("Hydra/logs")
         }
-        try? FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: logDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
         return logDir.appendingPathComponent("daemon.log")
     }
 

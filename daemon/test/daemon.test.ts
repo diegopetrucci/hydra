@@ -800,4 +800,20 @@ describe("offered models (production provider)", () => {
     };
     expect(good.type).toBe("result");
   });
+
+  it("bots.create rejects an unregistered provider/model and creates no bot", async () => {
+    const core = await makeProdCore();
+    const bad = (await core.handleRequest({
+      id: "2",
+      type: "bots.create",
+      name: "B",
+      model: "openai/foo",
+    })) as { type: string; error?: { code: string } };
+    expect(bad.type).toBe("error");
+    expect(bad.error?.code).toBe("bad_request");
+    const list = (await core.handleRequest({ id: "3", type: "bots.list" })) as {
+      result: unknown[];
+    };
+    expect(list.result).toEqual([]);
+  });
 });
