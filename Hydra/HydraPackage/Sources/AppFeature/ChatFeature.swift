@@ -9,6 +9,10 @@ import SwiftUI
 @Reducer
 public struct ChatFeature {
 
+    /// The app and daemon share the machine clock; the daemon stamps a message after
+    /// the send, in whole milliseconds, hence a 1s tolerance when matching bubbles.
+    static let historyMatchTolerance: TimeInterval = 1
+
     // MARK: - State
 
     @ObservableState
@@ -171,13 +175,16 @@ public struct ChatFeature {
                 // Match by role "user" and identical text, consuming each persisted
                 // entry at most once. This is a best-effort approximation — the
                 // protocol provides no client-to-durable ID mapping.
-                var unmatchedPersistedUserTexts: [String] = historical
-                    .filter { $0.role == "user" }
-                    .map(\.text)
+                // A historical message only matches if it was stamped no earlier than
+                // the bubble (minus tolerance), so older identical texts don't eat it.
+                var unmatchedPersistedUsers: [ChatMessage] = historical.filter { $0.role == "user" }
                 for msg in pendingOptimistic {
                     if msg.role == "user",
-                       let idx = unmatchedPersistedUserTexts.firstIndex(of: msg.text) {
-                        unmatchedPersistedUserTexts.remove(at: idx)
+                       let idx = unmatchedPersistedUsers.firstIndex(where: {
+                           $0.text == msg.text
+                               && $0.createdAt >= msg.createdAt.addingTimeInterval(-Self.historyMatchTolerance)
+                       }) {
+                        unmatchedPersistedUsers.remove(at: idx)
                         // Already committed; don't re-append the optimistic bubble.
                     } else if merged[id: msg.id] == nil {
                         merged.append(msg)

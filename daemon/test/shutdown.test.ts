@@ -40,7 +40,9 @@ describe("shutdown", () => {
 
   it("session failure calls shutdown(1)", async () => {
     const shutdown = vi.fn();
-    exitOnSessionFailure(Promise.resolve({ reason: "failed", error: new Error("disk secret") }), { shutdown });
+    exitOnSessionFailure(Promise.resolve({ reason: "failed", error: new Error("disk secret") }), {
+      shutdown,
+    });
     await flush();
     expect(shutdown).toHaveBeenCalledOnce();
     const [code, line] = shutdown.mock.calls[0] as [number, string];

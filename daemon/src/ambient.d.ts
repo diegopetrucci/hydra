@@ -10,7 +10,7 @@
 declare module "@earendil-works/pi-coding-agent" {
   export interface ExtensionAPI {
     registerTool(tool: Record<string, unknown>): void;
-    on(event: string, handler: (...args: unknown[]) => unknown): void;
+    on(event: string, handler: (...args: unknown[]) => void): void;
     appendEntry(kind: string, data: unknown): void;
   }
   export type ExtensionContext = Record<string, unknown>;

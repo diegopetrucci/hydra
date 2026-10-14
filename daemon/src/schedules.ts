@@ -19,7 +19,6 @@
 import { defineDoc, defineExtension, defineTool, defineTask } from "@earendil-works/pi-durable";
 import type {
   ConversationDocToken,
-  ConversationId,
   Extension,
   Harness,
   TaskId,
@@ -126,15 +125,11 @@ export function nextRunAt(rule: StoredRule, fromMs: number): number {
     // and the mutation propagates to every day that follows).  Creating a
     // fresh Date(yr, mo, day, h, m) on each iteration avoids this.
     const fromDate = new Date(fromMs);
-    let d = new Date(
-      fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), h, m, 0, 0,
-    );
+    let d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), h, m, 0, 0);
 
     if (d.getTime() <= fromMs) {
       // Advance to the next calendar day by re-constructing with day+1.
-      d = new Date(
-        fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate() + 1, h, m, 0, 0,
-      );
+      d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate() + 1, h, m, 0, 0);
     }
 
     if (rule.weekdays_only) {
@@ -158,10 +153,7 @@ export function nextRunAt(rule: StoredRule, fromMs: number): number {
  *
  * Returns { ms } on success or { error } on failure.
  */
-export function parseAtField(
-  at: string,
-  nowMs: number,
-): { ms: number } | { error: string } {
+export function parseAtField(at: string, nowMs: number): { ms: number } | { error: string } {
   const hmMatch = /^(\d{1,2}):(\d{2})$/.exec(at);
   if (hmMatch) {
     const h = Number(hmMatch[1]);
@@ -186,7 +178,7 @@ export function parseAtField(
     const yr = Number(dtMatch[1]);
     const mo = Number(dtMatch[2]);
     const dy = Number(dtMatch[3]);
-    const h  = Number(dtMatch[4]);
+    const h = Number(dtMatch[4]);
     const mn = Number(dtMatch[5]);
 
     // Basic range validation before constructing a Date.
@@ -235,7 +227,7 @@ export function parseAtField(
 // ─── Local time formatter ─────────────────────────────────────────────────────
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS   = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
  * Locale-independent local-time formatter.
@@ -249,13 +241,13 @@ const MONTHS   = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
  * Uses Date getters directly so the result is stable regardless of locale.
  */
 export function fmtLocalTime(ms: number): string {
-  const d    = new Date(ms);
+  const d = new Date(ms);
   const wday = WEEKDAYS[d.getDay()]!;
-  const day  = d.getDate();
-  const mon  = MONTHS[d.getMonth()]!;
+  const day = d.getDate();
+  const mon = MONTHS[d.getMonth()]!;
   const year = d.getFullYear();
-  const hh   = String(d.getHours()).padStart(2, "0");
-  const mm   = String(d.getMinutes()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
   return `${wday} ${day} ${mon} ${year}, ${hh}:${mm}`;
 }
 
@@ -432,14 +424,16 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
   setHarness: (h: Harness) => void;
 } {
   const minIntervalMs = options.minIntervalMs ?? 60_000;
-  const maxSchedules  = options.maxSchedules  ?? 5;
+  const maxSchedules = options.maxSchedules ?? 5;
 
-  const minMins  = minIntervalMs / 60_000;
-  const descMin  = minMins === 1 ? "1 minute" : `${minMins} minutes`;
+  const minMins = minIntervalMs / 60_000;
+  const descMin = minMins === 1 ? "1 minute" : `${minMins} minutes`;
 
   // Late-bound harness: set by main.ts after Harness.open.
   let harnessRef: Harness | undefined;
-  function setHarness(h: Harness): void { harnessRef = h; }
+  function setHarness(h: Harness): void {
+    harnessRef = h;
+  }
 
   // ── schedule_message ──────────────────────────────────────────────────────
 
@@ -530,17 +524,16 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
           return toolErr("kind='every' requires a positive 'every_minutes' number.");
         }
         if (em > MAX_MINUTES) {
-          return toolErr(`'every_minutes' must be at most ${MAX_MINUTES} minutes (1 year). Got ${em}.`);
+          return toolErr(
+            `'every_minutes' must be at most ${MAX_MINUTES} minutes (1 year). Got ${em}.`,
+          );
         }
         const intervalMs = em * 60_000;
         if (intervalMs < minIntervalMs) {
-          return toolErr(
-            `Minimum interval is ${descMin} (${em} given).`,
-          );
+          return toolErr(`Minimum interval is ${descMin} (${em} given).`);
         }
-        rule    = { kind: "every", every_minutes: em };
+        rule = { kind: "every", every_minutes: em };
         firstAt = nowMs + intervalMs;
-
       } else if (kind === "daily") {
         const t = typeof args.time === "string" ? args.time : null;
         if (!t) {
@@ -556,9 +549,8 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
           return toolErr(`Invalid time '${t}': hours must be 0–23, minutes 0–59.`);
         }
         const wo = args.weekdays_only === true;
-        rule    = { kind: "daily", time: t, weekdays_only: wo };
+        rule = { kind: "daily", time: t, weekdays_only: wo };
         firstAt = nextRunAt(rule, nowMs);
-
       } else if (kind === "once") {
         const atStr = typeof args.at === "string" ? args.at : null;
         const inMins = typeof args.in_minutes === "number" ? args.in_minutes : null;
@@ -577,7 +569,9 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
             return toolErr("'in_minutes' must be a positive number.");
           }
           if (inMins > MAX_MINUTES) {
-            return toolErr(`'in_minutes' must be at most ${MAX_MINUTES} minutes (1 year). Got ${inMins}.`);
+            return toolErr(
+              `'in_minutes' must be at most ${MAX_MINUTES} minutes (1 year). Got ${inMins}.`,
+            );
           }
           firstAt = nowMs + inMins * 60_000;
         } else {
@@ -598,16 +592,15 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
           );
         }
         rule = { kind: "once" };
-
       } else {
-        return toolErr(
-          `Unknown kind '${String(kind)}'. Must be 'every', 'daily', or 'once'.`,
-        );
+        return toolErr(`Unknown kind '${String(kind)}'. Must be 'every', 'daily', or 'once'.`);
       }
 
       // Sanity: every path above must produce a finite, valid timestamp.
       if (!isFinite(firstAt) || isNaN(new Date(firstAt).getTime())) {
-        return toolErr("Internal: computed timestamp is not a valid date. Please report this error.");
+        return toolErr(
+          "Internal: computed timestamp is not a valid date. Please report this error.",
+        );
       }
 
       const summary = ruleText(rule, firstAt);
@@ -621,7 +614,9 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
       // re-executed; no memo dedup is needed.
       const result = await api.commit(async (tx) => {
         const doc = await tx.doc(
-          SchedulesDoc as ConversationDocToken<{ schedules: Record<string, Record<string, string | number>> }>,
+          SchedulesDoc as ConversationDocToken<{
+            schedules: Record<string, Record<string, string | number>>;
+          }>,
           api.conversationId,
         );
 
@@ -658,15 +653,19 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
 
       if (!result.ok) {
         const n = Object.keys(
-          (await api.snapshot(
-            SchedulesDoc as ConversationDocToken<{ schedules: Record<string, Record<string, string | number>> }>,
-            api.conversationId,
-            ctx,
-          ))?.schedules ?? {},
+          (
+            await api.snapshot(
+              SchedulesDoc as ConversationDocToken<{
+                schedules: Record<string, Record<string, string | number>>;
+              }>,
+              api.conversationId,
+              ctx,
+            )
+          )?.schedules ?? {},
         ).length;
         return toolErr(
           `This bot already has ${n} active schedule${n === 1 ? "" : "s"} ` +
-          `(maximum is ${maxSchedules}). Cancel one first.`,
+            `(maximum is ${maxSchedules}). Cancel one first.`,
         );
       }
 
@@ -695,7 +694,9 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
 
     execute: async (_rawArgs, api, ctx: Context): Promise<ToolExecutionResult> => {
       const doc = await api.snapshot(
-        SchedulesDoc as ConversationDocToken<{ schedules: Record<string, Record<string, string | number>> }>,
+        SchedulesDoc as ConversationDocToken<{
+          schedules: Record<string, Record<string, string | number>>;
+        }>,
         api.conversationId,
         ctx,
       );
@@ -758,7 +759,9 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
 
       // Verify the schedule belongs to this conversation.
       const doc = await api.snapshot(
-        SchedulesDoc as ConversationDocToken<{ schedules: Record<string, Record<string, string | number>> }>,
+        SchedulesDoc as ConversationDocToken<{
+          schedules: Record<string, Record<string, string | number>>;
+        }>,
         api.conversationId,
         ctx,
       );
@@ -771,7 +774,7 @@ export function createSchedulesExtension(options: SchedulesOptions = {}): {
         return toolErr("Internal error: harness not available.");
       }
 
-      const taskId = idNum as unknown as TaskId<void>;
+      const taskId = idNum as TaskId<void>;
       const abortResult = await harnessRef.abortTask(taskId, ctx);
 
       return {

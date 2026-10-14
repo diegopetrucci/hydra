@@ -13,7 +13,12 @@
 
 import { createHash } from "node:crypto";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
-import type { Extension, Registry, ToolExecutionResult, ToolRegistration } from "@earendil-works/pi-durable";
+import type {
+  Extension,
+  Registry,
+  ToolExecutionResult,
+  ToolRegistration,
+} from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import { Type } from "@earendil-works/pi-ai";
 import { toLlmContent } from "@earendil-works/pi-mcp";
@@ -40,7 +45,11 @@ function stripConnectorPrefix(connectorId: string, mcpName: string): string {
   const body = m?.[2] ?? mcpName;
   const lower = body.toLowerCase();
   const id = connectorId.toLowerCase();
-  if (lower.startsWith(id) && lower.length > id.length && /[^A-Za-z0-9]/.test(body.charAt(id.length))) {
+  if (
+    lower.startsWith(id) &&
+    lower.length > id.length &&
+    /[^A-Za-z0-9]/.test(body.charAt(id.length))
+  ) {
     const rest = body.slice(id.length).replace(/^[^A-Za-z0-9]+/, "");
     if (rest) return rest;
   }
@@ -53,7 +62,10 @@ function stripConnectorPrefix(connectorId: string, mcpName: string): string {
  * 64 characters (or one that collides) gets a hash suffix of the original name.
  * Returns a Map from model-facing name to the original MCP name.
  */
-export function mapToolNames(connectorId: string, mcpNames: readonly string[]): Map<string, string> {
+export function mapToolNames(
+  connectorId: string,
+  mcpNames: readonly string[],
+): Map<string, string> {
   const prefix = `mcp__${connectorId}__`;
   const sanitize = (s: string): string => s.replace(/[^A-Za-z0-9_]/g, "_");
   const used = new Set<string>();
@@ -114,7 +126,10 @@ function buildConnectorExtension(
               args as Record<string, unknown>,
               context.abortSignal ?? undefined,
             );
-            return { output: toLlmContent(result) as ToolExecutionResult["output"], isError: result.isError === true };
+            return {
+              output: toLlmContent(result) as ToolExecutionResult["output"],
+              isError: result.isError === true,
+            };
           } catch (e) {
             if (context.abortSignal?.aborted) throw e;
             const status = manager.list().find((c) => c.id === connectorId)?.status;
@@ -124,7 +139,9 @@ function buildConnectorExtension(
               );
             }
             if (e instanceof ConnectorError) return errorResult(e.message);
-            process.stderr.write(`[hydra-daemon] connector ${connectorId} tool ${mcpName} failed: ${describeError(e)}\n`);
+            process.stderr.write(
+              `[hydra-daemon] connector ${connectorId} tool ${mcpName} failed: ${describeError(e)}\n`,
+            );
             return errorResult(
               `The ${connectorName} request failed (${describeError(e)}). It may or may not have taken effect, so check before retrying a change.`,
             );
@@ -137,7 +154,10 @@ function buildConnectorExtension(
 }
 
 /** Prompt text naming connected and not-connected connectors (exported for tests). */
-export function connectorsPromptText(connected: readonly string[], notConnected: readonly string[]): string {
+export function connectorsPromptText(
+  connected: readonly string[],
+  notConnected: readonly string[],
+): string {
   const parts: string[] = [];
   if (connected.length > 0) {
     parts.push(
@@ -169,7 +189,7 @@ export function connectorsPromptText(connected: readonly string[], notConnected:
  */
 export function attachConnectorTools(registry: Registry, manager: ConnectorManager): () => void {
   const installed = new Map<string, { extension: Extension; signature: string }>();
-  const toolSearch = createToolSearchExtension() as unknown as Extension;
+  const toolSearch = createToolSearchExtension();
   let toolSearchInstalled = false;
   let promptKey: string | undefined;
   let promptExtension: Extension | undefined;
@@ -218,7 +238,11 @@ export function attachConnectorTools(registry: Registry, manager: ConnectorManag
       if (promptExtension) registry.uninstall(promptExtension);
       promptExtension = defineExtension({
         name: "connectors",
-        sections: [section("connectors", (): string => connectorsPromptText(connected, notConnected), { tag: true })],
+        sections: [
+          section("connectors", (): string => connectorsPromptText(connected, notConnected), {
+            tag: true,
+          }),
+        ],
       });
       registry.install(promptExtension);
     }

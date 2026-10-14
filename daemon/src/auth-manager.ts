@@ -9,7 +9,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { AuthEvent, AuthInteraction, AuthPrompt, AuthType, Credential } from "@earendil-works/pi-ai";
+import type {
+  AuthEvent,
+  AuthInteraction,
+  AuthPrompt,
+  AuthType,
+  Credential,
+} from "@earendil-works/pi-ai";
 import { ModelsError } from "@earendil-works/pi-ai";
 import type { EmitFn } from "./daemon-core.js";
 import type {
@@ -136,7 +142,7 @@ export class AuthManager {
     // Run the login flow in the background; never await here.
     this.loginFn(providerId, type, interaction)
       .then(() => {
-        // If the session was removed by cancel(), stay quiet 
+        // If the session was removed by cancel(), stay quiet
         // (auth.failed was already emitted by cancel()).
         if (!this.sessions.has(loginId)) return;
         this.sessions.delete(loginId);
@@ -158,9 +164,7 @@ export class AuthManager {
         // secrets, HTTP bodies, or URLs).
         const errClass = err instanceof Error ? err.constructor.name : "Error";
         const errCode = err instanceof ModelsError ? ` code=${err.code}` : "";
-        process.stderr.write(
-          `[hydra-daemon] auth.failed (${loginId}): ${errClass}${errCode}\n`,
-        );
+        process.stderr.write(`[hydra-daemon] auth.failed (${loginId}): ${errClass}${errCode}\n`);
         this.emitFn({
           type: "event",
           event: "auth.failed",

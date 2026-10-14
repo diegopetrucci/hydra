@@ -11,7 +11,13 @@
 
 import type { Context } from "@earendil-works/chord";
 import { watchEvents } from "@earendil-works/pi-durable";
-import type { AgentEvent, AgentEventStream, Harness, JsonObject, WatchEnd } from "@earendil-works/pi-durable";
+import type {
+  AgentEvent,
+  AgentEventStream,
+  Harness,
+  JsonObject,
+  WatchEnd,
+} from "@earendil-works/pi-durable";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { CONNECTORS } from "./connectors.js";
@@ -191,13 +197,11 @@ export class BotWatcher {
   async start(): Promise<void> {
     this.stream = await watchEvents(this.harness, this.convId, this.ctx);
     const botId = String(this.convId);
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self = this;
 
     this.stream.start(async (events: readonly AgentEvent[], _ctx: Context) => {
       for (const ev of events) {
-        if (self.stopped) break;
-        await self.handleEvent(ev, botId);
+        if (this.stopped) break;
+        await this.handleEvent(ev, botId);
       }
     });
   }
@@ -215,23 +219,37 @@ export class BotWatcher {
     this.emitFn(event);
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  private async handleEvent(ev: AgentEvent, botId: string): Promise<void> {
+  protected async handleEvent(ev: AgentEvent, botId: string): Promise<void> {
     switch (ev.type) {
       case "run_start": {
         // Reset the web-tools per-reply request budget before the run starts.
         this.onRunStart?.();
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "thinking" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "thinking",
+        } satisfies BotActivityEvent);
         break;
       }
 
       case "turn_start": {
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "thinking" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "thinking",
+        } satisfies BotActivityEvent);
         break;
       }
 
       case "run_end": {
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "idle" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "idle",
+        } satisfies BotActivityEvent);
         break;
       }
 
@@ -370,7 +388,11 @@ export class BotWatcher {
 
         const meta = this.getBot(this.convId);
         if (meta) {
-          const updated: StoredBotMeta = { ...meta, lastMessagePreview: preview, lastMessageAt: createdAt };
+          const updated: StoredBotMeta = {
+            ...meta,
+            lastMessagePreview: preview,
+            lastMessageAt: createdAt,
+          };
           this.emit({
             type: "event",
             event: "bot.updated",
@@ -395,19 +417,24 @@ export class BotWatcher {
 
       case "tool_execution_end": {
         // Return to thinking state; generation is still running.
-        this.emit({ type: "event", event: "bot.activity", botId, activity: "thinking" } satisfies BotActivityEvent);
+        this.emit({
+          type: "event",
+          event: "bot.activity",
+          botId,
+          activity: "thinking",
+        } satisfies BotActivityEvent);
         break;
       }
 
       case "task_failed": {
         // Classify the failure: an auth error gets code "auth_required"; everything
-        // else gets "generation_failed".  Never emit the raw upstream message 
+        // else gets "generation_failed".  Never emit the raw upstream message
         // (it may contain HTTP response bodies, URLs, or refresh tokens).
         // Classification is based on pi-ai ModelsError message patterns ("auth",
         // "oauth", "credential") and HTTP 401/403 indicators in the message text.
         // The event type doesn't expose `detail` but the runtime may include it
         // when TaskOutcomeError serialises structured data; pass it when present.
-        const detail = (ev as unknown as { detail?: unknown }).detail;
+        const detail = "detail" in ev ? ev.detail : undefined;
         const isAuthError = isTaskFailedAuthError(ev.message, detail);
         const code = isAuthError ? "auth_required" : "generation_failed";
         const message = isAuthError

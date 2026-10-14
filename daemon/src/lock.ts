@@ -78,7 +78,11 @@ function tryCreate(lockPath: string, isRetry: boolean): void {
     handleExisting(lockPath, isRetry);
     return;
   } finally {
-    try { unlinkSync(tmpPath); } catch { /* clean up regardless */ }
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      /* clean up regardless */
+    }
   }
 }
 
@@ -90,7 +94,11 @@ function handleExisting(lockPath: string, isRetry: boolean): void {
   const pid = readPid(lockPath);
   if (pid === null || pid === process.pid) {
     // Corrupt file or it's our own PID — remove and retry.
-    try { unlinkSync(lockPath); } catch { /* may already be gone */ }
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      /* may already be gone */
+    }
     tryCreate(lockPath, true);
     return;
   }

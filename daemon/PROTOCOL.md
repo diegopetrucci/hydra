@@ -138,7 +138,7 @@ Create a new bot backed by a fresh pi-durable conversation.
 
 `model` is optional; omitting it uses the daemon default (`anthropic/claude-sonnet-5-5`).
 Format: `"provider/modelId"`.
-An anthropic model that `models.list` does not offer is rejected with `bad_request`.
+Any model that `models.list` does not offer (including unregistered providers or models) is rejected with `bad_request`.
 Existing bots keep their stored model.
 
 **Result** – the created bot object (same shape as `bots.list` items).

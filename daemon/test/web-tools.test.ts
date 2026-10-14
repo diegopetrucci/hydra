@@ -12,7 +12,15 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { webToolsExtension, WEB_TOOL_NAMES } from "../src/web-tools.js";
-import { computeToolLabel, isTaskFailedAuthError } from "../src/bot-watcher.js";
+import { BotWatcher, computeToolLabel, isTaskFailedAuthError } from "../src/bot-watcher.js";
+import type { AgentEvent } from "@earendil-works/pi-durable";
+
+/** Exposes the protected event handler so tests can feed events directly. */
+class TestBotWatcher extends BotWatcher {
+  dispatch(ev: unknown, botId: string): Promise<void> {
+    return this.handleEvent(ev as AgentEvent, botId);
+  }
+}
 
 // ─── Network guard ────────────────────────────────────────────────────────────
 
@@ -22,10 +30,8 @@ beforeAll(() => {
   savedFetch = globalThis.fetch;
   // Fail loudly if any test unexpectedly reaches the network.
   globalThis.fetch = ((): never => {
-    throw new Error(
-      "Unexpected real network call in web-tools tests – stub the transport instead",
-    );
-  }) as unknown as typeof globalThis.fetch;
+    throw new Error("Unexpected real network call in web-tools tests – stub the transport instead");
+  }) as typeof globalThis.fetch;
 });
 
 afterAll(() => {
@@ -53,9 +59,7 @@ describe("web-tools extension registration", () => {
     const section = webToolsExtension.sections?.[0];
     expect(section).toBeDefined();
     const rendered =
-      typeof section?.render === "function"
-        ? (section.render as () => string)()
-        : undefined;
+      typeof section?.render === "function" ? (section.render as () => string)() : undefined;
     expect(rendered).toMatch(/untrusted/i);
   });
 
@@ -72,11 +76,11 @@ describe("tool result mapping (pi-durable 1.2.0)", () => {
     const tool = webToolsExtension.tools?.find((t) => t.name === "get_search_content");
     expect(tool).toBeDefined();
     // Unknown responseId: returns an error-ish text result without any network call.
-    const result = (await tool!.execute(
+    const result = await tool!.execute(
       { responseId: "does-not-exist" },
       { callId: "c1" } as never,
       {} as never,
-    )) as unknown as Record<string, unknown>;
+    );
     expect(result).not.toHaveProperty("content");
     const output = result.output as Array<{ type: string; text?: string }>;
     expect(Array.isArray(output)).toBe(true);
@@ -99,9 +103,9 @@ describe("computeToolLabel – activity label generation", () => {
   });
 
   it("fetch_content with a single url → 'Reading <host>'", () => {
-    expect(
-      computeToolLabel("fetch_content", { url: "https://example.com/some/path?q=1" }),
-    ).toBe("Reading example.com");
+    expect(computeToolLabel("fetch_content", { url: "https://example.com/some/path?q=1" })).toBe(
+      "Reading example.com",
+    );
   });
 
   it("fetch_content with a urls array of 1 → 'Reading <host>'", () => {
@@ -152,7 +156,6 @@ describe("budget reset per reply", () => {
     // Use the BotWatcher class directly to verify the callback contract without
     // needing a real Harness or network.  We reach the private handleEvent
     // method by accessing it as unknown.
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const emitted: unknown[] = [];
@@ -160,7 +163,7 @@ describe("budget reset per reply", () => {
 
     // Construct a minimal BotWatcher.  The Harness argument is never used in
     // handleEvent (only in start/stop which we don't call here).
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       /* harness  */ {} as never,
       /* convId   */ 42 as never,
       /* emitFn   */ (ev) => emitted.push(ev),
@@ -173,9 +176,7 @@ describe("budget reset per reply", () => {
     );
 
     // Access private handleEvent via unknown cast.
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     // Fire two run_start events to verify the counter increments correctly.
     await handleEvent({ type: "run_start", inputs: [] }, "42");
@@ -185,19 +186,19 @@ describe("budget reset per reply", () => {
 
     // Verify the thinking activity event is still emitted.
     const thinkingEvents = emitted.filter(
-      (e) => (e as { event?: string }).event === "bot.activity" &&
-              (e as { activity?: string }).activity === "thinking",
+      (e) =>
+        (e as { event?: string }).event === "bot.activity" &&
+        (e as { activity?: string }).activity === "thinking",
     );
     expect(thinkingEvents.length).toBe(2);
   });
 
   it("onRunStart is not called for turn_start (only run_start triggers budget reset)", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     let runStartCallCount = 0;
 
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       1 as never,
       () => {},
@@ -209,9 +210,7 @@ describe("budget reset per reply", () => {
       },
     );
 
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     await handleEvent({ type: "turn_start" }, "1");
     expect(runStartCallCount).toBe(0);
@@ -222,12 +221,11 @@ describe("budget reset per reply", () => {
 
 describe("tool_execution_start activity event", () => {
   it("emits bot.activity with activity:'tool', correct tool name and label", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const emitted: unknown[] = [];
 
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       7 as never,
       (ev) => emitted.push(ev),
@@ -236,12 +234,15 @@ describe("tool_execution_start activity event", () => {
       BACKGROUND_CONTEXT,
     );
 
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     await handleEvent(
-      { type: "tool_execution_start", toolCallId: "c1", toolName: "web_search", args: { query: "TypeScript" } },
+      {
+        type: "tool_execution_start",
+        toolCallId: "c1",
+        toolName: "web_search",
+        args: { query: "TypeScript" },
+      },
       "7",
     );
 
@@ -258,12 +259,11 @@ describe("tool_execution_start activity event", () => {
   });
 
   it("emits 'Reading <host>' label for fetch_content with a single URL", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const emitted: unknown[] = [];
 
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       8 as never,
       (ev) => emitted.push(ev),
@@ -272,9 +272,7 @@ describe("tool_execution_start activity event", () => {
       BACKGROUND_CONTEXT,
     );
 
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     await handleEvent(
       {
@@ -291,15 +289,14 @@ describe("tool_execution_start activity event", () => {
   });
 });
 
-// 
+//
 
-describe("item 2 \ task_failed auth classification", () => {
+describe("item 2  task_failed auth classification", () => {
   it("auth error message is classified as auth_required; bot.activity idle is emitted", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const emitted: unknown[] = [];
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       99 as never,
       (ev) => emitted.push(ev),
@@ -307,13 +304,16 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     // Simulate a task_failed with an auth error message from pi-ai resolve.js.
     await handleEvent(
-      { type: "task_failed", taskId: 1, kind: "pi.generation", message: "API key auth failed for provider anthropic" },
+      {
+        type: "task_failed",
+        taskId: 1,
+        kind: "pi.generation",
+        message: "API key auth failed for provider anthropic",
+      },
       "99",
     );
 
@@ -325,18 +325,18 @@ describe("item 2 \ task_failed auth classification", () => {
 
     // bot.activity idle must be emitted after the error.
     const idleEvent = emitted.find(
-      (e) => (e as { event?: string }).event === "bot.activity" &&
-             (e as { activity?: string }).activity === "idle",
+      (e) =>
+        (e as { event?: string }).event === "bot.activity" &&
+        (e as { activity?: string }).activity === "idle",
     );
     expect(idleEvent).toBeDefined();
   });
 
   it("oauth error message is classified as auth_required", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const emitted: unknown[] = [];
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       100 as never,
       (ev) => emitted.push(ev),
@@ -344,12 +344,15 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     await handleEvent(
-      { type: "task_failed", taskId: 2, kind: "pi.generation", message: "OAuth refresh failed for anthropic" },
+      {
+        type: "task_failed",
+        taskId: 2,
+        kind: "pi.generation",
+        message: "OAuth refresh failed for anthropic",
+      },
       "100",
     );
 
@@ -360,11 +363,10 @@ describe("item 2 \ task_failed auth classification", () => {
   });
 
   it("generic error message is classified as generation_failed; idle is still emitted", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const emitted: unknown[] = [];
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       101 as never,
       (ev) => emitted.push(ev),
@@ -372,9 +374,7 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     await handleEvent(
       { type: "task_failed", taskId: 3, kind: "pi.generation", message: "Context window exceeded" },
@@ -391,19 +391,19 @@ describe("item 2 \ task_failed auth classification", () => {
 
     // bot.activity idle is emitted after any task_failed.
     const idleEvent = emitted.find(
-      (e) => (e as { event?: string }).event === "bot.activity" &&
-             (e as { activity?: string }).activity === "idle",
+      (e) =>
+        (e as { event?: string }).event === "bot.activity" &&
+        (e as { activity?: string }).activity === "idle",
     );
     expect(idleEvent).toBeDefined();
   });
 
-  it("item 3 \ raw upstream message does not appear in any bot.error event", async () => {
-    const { BotWatcher } = await import("../src/bot-watcher.js");
+  it("item 3  raw upstream message does not appear in any bot.error event", async () => {
     const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
 
     const SENTINEL = "SENTINEL_RAW_ERROR_sk_live_abc123";
     const emitted: unknown[] = [];
-    const watcher = new BotWatcher(
+    const watcher = new TestBotWatcher(
       {} as never,
       102 as never,
       (ev) => emitted.push(ev),
@@ -411,9 +411,7 @@ describe("item 2 \ task_failed auth classification", () => {
       async () => {},
       BACKGROUND_CONTEXT,
     );
-    const handleEvent = (watcher as unknown as {
-      handleEvent: (ev: unknown, botId: string) => Promise<void>;
-    }).handleEvent.bind(watcher);
+    const handleEvent = watcher.dispatch.bind(watcher);
 
     // Simulate a task_failed whose message contains a raw upstream secret.
     await handleEvent(
@@ -431,7 +429,7 @@ describe("item 2 \ task_failed auth classification", () => {
   });
 });
 
-// 
+//
 
 describe("isTaskFailedAuthError classification", () => {
   it.each([

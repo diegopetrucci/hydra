@@ -14,12 +14,15 @@ export type SessionEndLike = { reason: "closed" } | { reason: "failed"; error: u
 
 export function exitOnSessionFailure(
   closed: Promise<SessionEndLike>,
-  deps: { shutdown: (code: number, logLine: string) => unknown },
+  deps: { shutdown: (code: number, logLine: string) => void | Promise<void> },
 ): void {
   closed.then(
     (end) => {
       if (end.reason !== "failed") return;
-      void deps.shutdown(1, `[hydra-daemon] Session failed: ${describeError(end.error)}. Exiting.\n`);
+      void deps.shutdown(
+        1,
+        `[hydra-daemon] Session failed: ${describeError(end.error)}. Exiting.\n`,
+      );
     },
     () => {
       // `closed` is not expected to reject; treat it as a failure too.

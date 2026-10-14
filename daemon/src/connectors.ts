@@ -80,7 +80,7 @@ export interface ConnectorDeps {
   authorize: (
     provider: McpOAuthProvider,
     options: { serverUrl: string; authorizationCode: string; iss?: string; signal?: AbortSignal },
-  ) => Promise<unknown>;
+  ) => Promise<void>;
   listenCallback: (timeoutMs: number) => Promise<CallbackHandle>;
   signInTimeoutMs: number;
   retryDelayMs: number;
@@ -91,7 +91,9 @@ export interface ConnectorDeps {
 
 const defaultDeps: ConnectorDeps = {
   createTransport: (def, auth) => new StreamableHttpTransport({ url: def.url, authProvider: auth }),
-  authorize: (provider, options) => authorizeMcp(provider, options),
+  authorize: async (provider, options) => {
+    await authorizeMcp(provider, options);
+  },
   listenCallback: (timeoutMs) =>
     OAuthCallbackServer.listen({ port: CALLBACK_PORT, host: "127.0.0.1", timeoutMs }),
   signInTimeoutMs: SIGN_IN_TIMEOUT_MS,
@@ -100,12 +102,10 @@ const defaultDeps: ConnectorDeps = {
   reconnectMaxMs: 5 * 60_000,
 };
 
-interface Entry {
+interface EntryState {
   def: ConnectorDef;
   status: ConnectorStatus;
   error?: string;
-  /** Provider for the current generation; its OAuth state writes are dropped once superseded. */
-  provider: McpOAuthProvider;
   /** Receives the authorization URL pi-mcp wants opened; set only during a sign-in. */
   redirectSink: ((url: URL) => void) | undefined;
   client: McpClient | undefined;
@@ -117,6 +117,11 @@ interface Entry {
   retryAttempt: number;
   /** Pending sign-out cleanup (client close, store delete); sign-in waits for it. */
   signOutCleanup: Promise<void> | undefined;
+}
+
+interface Entry extends EntryState {
+  /** Provider for the current generation; its OAuth state writes are dropped once superseded. */
+  provider: McpOAuthProvider;
 }
 
 interface ActiveSignIn {
@@ -139,7 +144,9 @@ class Superseded extends ConnectorError {
 
 function isAuthFailure(e: unknown): boolean {
   return (
-    e instanceof McpOAuthAuthorizationRequiredError || e instanceof OAuthError || e instanceof McpAuthRequiredError
+    e instanceof McpOAuthAuthorizationRequiredError ||
+    e instanceof OAuthError ||
+    e instanceof McpAuthRequiredError
   );
 }
 
@@ -149,7 +156,7 @@ function isTransient(e: unknown): boolean {
 }
 
 export class ConnectorManager {
-  private readonly entries = new Map<string, Entry>();
+  protected readonly entries = new Map<string, Entry>();
   private readonly deps: ConnectorDeps;
   private activeSignIn: ActiveSignIn | undefined;
   private signInStarting = false;
@@ -164,10 +171,9 @@ export class ConnectorManager {
   ) {
     this.deps = { ...defaultDeps, ...deps };
     for (const def of CONNECTORS) {
-      const entry: Entry = {
+      const state: EntryState = {
         def,
         status: "signed_out",
-        provider: undefined as unknown as McpOAuthProvider,
         redirectSink: undefined,
         client: undefined,
         opening: undefined,
@@ -177,7 +183,7 @@ export class ConnectorManager {
         retryAttempt: 0,
         signOutCleanup: undefined,
       };
-      entry.provider = this.makeProvider(entry);
+      const entry: Entry = Object.assign(state, { provider: this.makeProvider(state) });
       this.entries.set(def.id, entry);
     }
   }
@@ -196,7 +202,7 @@ export class ConnectorManager {
 
   /** Resolves when background connects scheduled so far have settled (tests). */
   async settled(): Promise<void> {
-    await Promise.allSettled([...this.background]);
+    await Promise.allSettled(this.background);
   }
 
   /**
@@ -209,11 +215,13 @@ export class ConnectorManager {
   }
 
   private notifyChange(): void {
-    for (const listener of [...this.listeners]) {
+    for (const listener of Array.from(this.listeners)) {
       try {
         listener();
       } catch (e) {
-        process.stderr.write(`[hydra-daemon] connector change listener failed: ${describeError(e)}\n`);
+        process.stderr.write(
+          `[hydra-daemon] connector change listener failed: ${describeError(e)}\n`,
+        );
       }
     }
   }
@@ -324,7 +332,12 @@ export class ConnectorManager {
   }
 
   private info(e: Entry): ConnectorInfo {
-    return { id: e.def.id, name: e.def.name, status: e.status, ...(e.error ? { error: e.error } : {}) };
+    return {
+      id: e.def.id,
+      name: e.def.name,
+      status: e.status,
+      ...(e.error ? { error: e.error } : {}),
+    };
   }
 
   private setStatus(entry: Entry, status: ConnectorStatus, error?: string): void {
@@ -335,7 +348,7 @@ export class ConnectorManager {
   }
 
   /** A provider whose state writes and redirects are only honoured while its generation is current. */
-  private makeProvider(entry: Entry): McpOAuthProvider {
+  private makeProvider(entry: EntryState): McpOAuthProvider {
     const gen = entry.gen;
     const current = (): boolean => gen === entry.gen;
     return new McpOAuthProvider({
@@ -385,7 +398,9 @@ export class ConnectorManager {
           this.notifyChange();
         })
         .catch((e: unknown) => {
-          process.stderr.write(`[hydra-daemon] connector ${entry.def.id} tool refresh failed: ${describeError(e)}\n`);
+          process.stderr.write(
+            `[hydra-daemon] connector ${entry.def.id} tool refresh failed: ${describeError(e)}\n`,
+          );
         });
     });
     // Deliberate: an unexpected close keeps tools installed and status connected; the next call reopens lazily (auth failure -> needs_sign_in).
@@ -442,14 +457,16 @@ export class ConnectorManager {
   }
 
   /** Auth failures need the user; anything else stays "error" and is retried with backoff. */
-  private failConnect(entry: Entry, e: unknown): void {
+  protected failConnect(entry: Entry, e: unknown): void {
     if (isAuthFailure(e)) {
       clearTimeout(entry.retryTimer);
       entry.retryTimer = undefined;
       this.setStatus(entry, "needs_sign_in");
       return;
     }
-    process.stderr.write(`[hydra-daemon] connector ${entry.def.id} connect failed: ${describeError(e)}\n`);
+    process.stderr.write(
+      `[hydra-daemon] connector ${entry.def.id} connect failed: ${describeError(e)}\n`,
+    );
     this.setStatus(entry, "error", `Could not connect to ${entry.def.name} (${describeError(e)}).`);
     this.scheduleReconnect(entry);
   }
@@ -458,7 +475,10 @@ export class ConnectorManager {
     if (this.closed) return;
     clearTimeout(entry.retryTimer);
     const gen = entry.gen;
-    const delay = Math.min(this.deps.reconnectBaseMs * 2 ** entry.retryAttempt, this.deps.reconnectMaxMs);
+    const delay = Math.min(
+      this.deps.reconnectBaseMs * 2 ** entry.retryAttempt,
+      this.deps.reconnectMaxMs,
+    );
     entry.retryAttempt++;
     entry.retryTimer = setTimeout(() => {
       entry.retryTimer = undefined;
@@ -480,7 +500,9 @@ export class ConnectorManager {
       if (gen !== entry.gen) return;
       if (isAuthFailure(e)) this.failConnect(entry, e);
       else {
-        process.stderr.write(`[hydra-daemon] connector ${entry.def.id} reconnect failed: ${describeError(e)}\n`);
+        process.stderr.write(
+          `[hydra-daemon] connector ${entry.def.id} reconnect failed: ${describeError(e)}\n`,
+        );
         this.scheduleReconnect(entry);
       }
     }
@@ -507,7 +529,12 @@ export class ConnectorManager {
     }, this.deps.signInTimeoutMs);
     entry.redirectSink = (url) => {
       if (gen !== entry.gen) return;
-      this.emit({ type: "event", event: "connector.signInUrl", connectorId: entry.def.id, url: url.toString() });
+      this.emit({
+        type: "event",
+        event: "connector.signInUrl",
+        connectorId: entry.def.id,
+        url: url.toString(),
+      });
     };
     this.setStatus(entry, "connecting");
     try {
@@ -544,10 +571,20 @@ export class ConnectorManager {
             e.reason === "timeout" ? "Sign-in timed out. Try again." : "Sign-in was cancelled.",
           );
         } else if (isAuthFailure(e)) {
-          this.setStatus(entry, "signed_out", `Sign-in with ${entry.def.name} was not accepted (${describeError(e)}).`);
+          this.setStatus(
+            entry,
+            "signed_out",
+            `Sign-in with ${entry.def.name} was not accepted (${describeError(e)}).`,
+          );
         } else {
-          process.stderr.write(`[hydra-daemon] connector ${entry.def.id} sign-in failed: ${describeError(e)}\n`);
-          this.setStatus(entry, "error", `Sign-in with ${entry.def.name} failed (${describeError(e)}).`);
+          process.stderr.write(
+            `[hydra-daemon] connector ${entry.def.id} sign-in failed: ${describeError(e)}\n`,
+          );
+          this.setStatus(
+            entry,
+            "error",
+            `Sign-in with ${entry.def.name} failed (${describeError(e)}).`,
+          );
         }
       }
     } finally {

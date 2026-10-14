@@ -143,7 +143,12 @@ describe("nb-r5wv regression: daemon exits after OAuth browser login is in progr
 
       // ── start OAuth browser login ─────────────────────────────────────────
       child.stdin!.write(
-        JSON.stringify({ id: "l1", type: "auth.login", providerId: "anthropic", loginType: "oauth" }) + "\n",
+        JSON.stringify({
+          id: "l1",
+          type: "auth.login",
+          providerId: "anthropic",
+          loginType: "oauth",
+        }) + "\n",
       );
       const loginResult = await waitForEvent((o) => o["id"] === "l1" && o["type"] === "result");
       const loginId = (loginResult["result"] as Record<string, string>)["loginId"];
@@ -160,7 +165,8 @@ describe("nb-r5wv regression: daemon exits after OAuth browser login is in progr
       expect(typeof promptId).toBe("string");
 
       child.stdin!.write(
-        JSON.stringify({ id: "r1", type: "auth.respond", loginId, promptId, value: "browser" }) + "\n",
+        JSON.stringify({ id: "r1", type: "auth.respond", loginId, promptId, value: "browser" }) +
+          "\n",
       );
 
       // ── wait for auth.url (callback server is now listening on :53692) ────

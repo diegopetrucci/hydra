@@ -11,10 +11,15 @@
  * spike limitation: concurrent bots contend for the same 6-request budget.
  */
 
-import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { ensurePrivateDir } from "./private-dir.js";
 import { defineExtension, section } from "@earendil-works/pi-durable";
-import type { Extension, PromptSection, ToolRegistration, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type {
+  Extension,
+  PromptSection,
+  ToolRegistration,
+  ToolExecutionResult,
+} from "@earendil-works/pi-durable";
 import type { TSchema } from "@earendil-works/pi-ai";
 import type { Context } from "@earendil-works/chord";
 
@@ -25,18 +30,25 @@ import registerWebTools from "@diegopetrucci/pi-web-access/web-tools.ts";
 
 type FetchLike = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+/** pi-coding-agent tool result shape returned by captured tools. */
+interface CapturedToolResult {
+  content: ToolExecutionResult["output"];
+  details?: ToolExecutionResult["details"];
+  isError?: boolean;
+}
+
 /** Shape of a tool captured from pi.registerTool() calls in web-tools.ts. */
 interface CapturedTool {
   name: string;
   description: string;
   parameters: TSchema;
-  prepareArguments?: (args: unknown) => unknown;
+  prepareArguments?: ToolRegistration["prepareArguments"];
   execute: (
     toolCallId: string,
     params: unknown,
     signal?: AbortSignal,
     onUpdate?: (partial: unknown) => void,
-  ) => Promise<unknown>;
+  ) => Promise<CapturedToolResult>;
 }
 
 // ─── Extension builder ────────────────────────────────────────────────────────
@@ -55,7 +67,7 @@ function buildExtension(options?: { fetch?: FetchLike }): {
     registerTool(tool: unknown): void {
       capturedTools.push(tool as CapturedTool);
     },
-    on(event: string, handler: (...args: unknown[]) => unknown): void {
+    on(event: string, handler: (...args: unknown[]) => void): void {
       if (event === "agent_start") agentStartHandler = handler as () => void;
       // Ignore session_start, session_tree, session_shutdown – no session
       // restore in the daemon (no persistent ExtensionContext).
@@ -74,18 +86,16 @@ function buildExtension(options?: { fetch?: FetchLike }): {
       name: t.name,
       description: t.description,
       parameters: t.parameters,
-      ...(t.prepareArguments
-        ? { prepareArguments: t.prepareArguments as ToolRegistration["prepareArguments"] }
-        : {}),
-      async execute(args: unknown, api: { callId: string }, context: Context): Promise<ToolExecutionResult> {
+      ...(t.prepareArguments ? { prepareArguments: t.prepareArguments } : {}),
+      async execute(
+        args: unknown,
+        api: { callId: string },
+        context: Context,
+      ): Promise<ToolExecutionResult> {
         const signal = context.abortSignal ?? undefined;
         // onUpdate is omitted: the daemon has no live TUI; intermediate progress
         // is not streamed to protocol clients.
-        const result = (await t.execute(api.callId, args, signal, undefined)) as {
-          content: ToolExecutionResult["output"];
-          details?: ToolExecutionResult["details"];
-          isError?: boolean;
-        };
+        const result = await t.execute(api.callId, args, signal, undefined);
         // pi-web-access returns the pi-coding-agent shape (`content`); pi-durable 1.2.0 expects `output`.
         return { output: result.content, details: result.details, isError: result.isError };
       },
@@ -135,8 +145,7 @@ export const webToolsExtension: Extension = _ext;
 export const resetWebToolsBudget: () => void = _handler ?? ((): void => {});
 
 /** Names of the tools registered by the web-tools extension. */
-export const WEB_TOOL_NAMES: readonly string[] =
-  _ext.tools?.map((t) => t.name) ?? [];
+export const WEB_TOOL_NAMES: readonly string[] = _ext.tools?.map((t) => t.name) ?? [];
 
 // ─── Setup helper ─────────────────────────────────────────────────────────────
 
@@ -158,7 +167,7 @@ export const WEB_TOOL_NAMES: readonly string[] =
 export function ensureWebAccessDir(dataDir: string): void {
   if (!process.env["PI_CODING_AGENT_DIR"]) {
     const webAccessDir = join(dataDir, "web-access");
-    mkdirSync(webAccessDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(webAccessDir);
     process.env["PI_CODING_AGENT_DIR"] = webAccessDir;
   }
 }

@@ -16,14 +16,8 @@
 import { describe, it, expect } from "vitest";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Harness, MemoryStorage, createRegistry } from "@earendil-works/pi-durable";
-import {
-  fauxAssistantMessage,
-  fauxText,
-} from "@earendil-works/pi-ai/providers/faux";
-import type {
-  FauxResponseFactory,
-  FauxProviderHandle,
-} from "@earendil-works/pi-ai/providers/faux";
+import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai/providers/faux";
+import type { FauxResponseFactory, FauxProviderHandle } from "@earendil-works/pi-ai/providers/faux";
 import type { TranscriptContext } from "@earendil-works/pi-ai";
 import { createTestModels } from "../src/models.js";
 import { DaemonCore } from "../src/daemon-core.js";
@@ -63,9 +57,7 @@ async function makeCore(): Promise<{
   const fakeFetch = (): never => {
     throw new Error("Unexpected network call in system-prompt tests");
   };
-  const { extension: webExt } = buildWebToolsExtensionForTest(
-    fakeFetch as unknown as Parameters<typeof buildWebToolsExtensionForTest>[0],
-  );
+  const { extension: webExt } = buildWebToolsExtensionForTest(fakeFetch);
 
   const registry = createRegistry();
   // hydraExtension MUST be installed before webToolsExtension.
@@ -86,7 +78,17 @@ async function makeCore(): Promise<{
   const events: ProtocolEvent[] = [];
   // enableIntro=false: the system-prompt test queues exactly one faux response
   // for the explicit bots.send; the intro must not consume it.
-  const core = new DaemonCore(harness, models, (ev) => events.push(ev), ctx, undefined, undefined, [], undefined, false);
+  const core = new DaemonCore(
+    harness,
+    models,
+    (ev) => events.push(ev),
+    ctx,
+    undefined,
+    undefined,
+    [],
+    undefined,
+    false,
+  );
   await core.start();
   return { core, events, faux };
 }
@@ -133,9 +135,7 @@ describe("hydra base system prompt", () => {
     // pi-durable sends a leading system message that contains all rendered
     // sections.  Subsequent system messages carry only delta patches.  We want
     // the first system message, which has the complete baseline sections record.
-    const systemMessages = capturedContext!.messages.filter(
-      (m) => m.role === "system",
-    );
+    const systemMessages = capturedContext!.messages.filter((m) => m.role === "system");
     expect(systemMessages.length).toBeGreaterThan(0);
 
     // Collect all sections from all system messages into a merged map so that
@@ -175,9 +175,7 @@ describe("hydra base system prompt", () => {
 
     // Wait for message.completed so the harness closes cleanly.
     await waitFor(() =>
-      events.some(
-        (e) => e.event === "message.completed" && "botId" in e && e.botId === botId,
-      ),
+      events.some((e) => e.event === "message.completed" && "botId" in e && e.botId === botId),
     );
   });
 });

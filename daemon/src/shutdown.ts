@@ -24,7 +24,9 @@ export interface ShutdownDeps {
  * and later calls return the same promise. Close failures (e.g. SessionFailed
  * after a Session failure) are swallowed; it never rejects.
  */
-export function createShutdown(deps: ShutdownDeps): (code: number, logLine: string) => Promise<void> {
+export function createShutdown(
+  deps: ShutdownDeps,
+): (code: number, logLine: string) => Promise<void> {
   let running: Promise<void> | undefined;
 
   return (code, logLine) => {
@@ -39,10 +41,17 @@ export function createShutdown(deps: ShutdownDeps): (code: number, logLine: stri
       }, deps.backstopMs ?? 5_000);
       backstop.unref();
 
-      await Promise.allSettled([...deps.inFlight()]);
-      if (deps.closeConnectors) await Promise.resolve().then(deps.closeConnectors).catch(() => {});
-      await Promise.resolve().then(deps.closeCore).catch(() => {});
-      await Promise.resolve().then(deps.closeHarness).catch(() => {});
+      await Promise.allSettled(deps.inFlight());
+      if (deps.closeConnectors)
+        await Promise.resolve()
+          .then(deps.closeConnectors)
+          .catch(() => {});
+      await Promise.resolve()
+        .then(deps.closeCore)
+        .catch(() => {});
+      await Promise.resolve()
+        .then(deps.closeHarness)
+        .catch(() => {});
       // Set exitCode and let the event loop drain instead of calling
       // process.exit(): that can truncate buffered stdout/stderr writes.
       deps.setExitCode(code);

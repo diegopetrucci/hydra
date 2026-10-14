@@ -14,7 +14,12 @@ import { readFile, writeFile, rename, chmod } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
+import type {
+  AuthOperationOptions,
+  Credential,
+  CredentialInfo,
+  CredentialStore,
+} from "@earendil-works/pi-ai";
 
 interface StoredCredentialFile {
   credentials: Record<string, Credential>;
@@ -95,7 +100,9 @@ export class FileCredentialStore implements CredentialStore {
     try {
       await chmod(this.path, 0o600);
     } catch {
-      process.stderr.write("[hydra-daemon] credentials.json permissions could not be restricted; ignoring it.\n");
+      process.stderr.write(
+        "[hydra-daemon] credentials.json permissions could not be restricted; ignoring it.\n",
+      );
       return { credentials: {} };
     }
     let raw: string;
@@ -150,8 +157,8 @@ export class FileCredentialStore implements CredentialStore {
   /**
    * Serialise fn globally: fn runs after every previously enqueued task
    * settles.  Because each write rewrites credentials.json wholesale, a per-
-   * provider chain is insufficient 
-   * 
+   * provider chain is insufficient
+   *
    * @param _providerId kept for call-site readability only.
    */
   private enqueue<T>(_providerId: string, fn: () => Promise<T>): Promise<T> {
@@ -167,7 +174,10 @@ export class FileCredentialStore implements CredentialStore {
       () => fn().then(resolveOuter, rejectOuter),
     );
     // Advance the global chain; drop the resolved value.
-    this.chain = next.then(() => {}, () => {});
+    this.chain = next.then(
+      () => {},
+      () => {},
+    );
     return result;
   }
 }

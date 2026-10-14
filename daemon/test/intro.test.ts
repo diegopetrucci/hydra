@@ -21,14 +21,8 @@
 import { describe, it, expect } from "vitest";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Harness, MemoryStorage, createRegistry } from "@earendil-works/pi-durable";
-import {
-  fauxAssistantMessage,
-  fauxText,
-} from "@earendil-works/pi-ai/providers/faux";
-import type {
-  FauxResponseFactory,
-  FauxProviderHandle,
-} from "@earendil-works/pi-ai/providers/faux";
+import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai/providers/faux";
+import type { FauxResponseFactory, FauxProviderHandle } from "@earendil-works/pi-ai/providers/faux";
 import type { TranscriptContext } from "@earendil-works/pi-ai";
 import { createTestModels } from "../src/models.js";
 import { DaemonCore } from "../src/daemon-core.js";
@@ -109,19 +103,24 @@ describe("bot intro turn", () => {
     // Wait for the intro generation to complete (no explicit bots.send).
     await waitFor(() =>
       events.some(
-        (e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
+        (e) =>
+          e.event === "message.completed" &&
+          "botId" in e &&
+          (e as { botId: string }).botId === botId,
       ),
     );
 
     // message.started must have arrived.
     const started = events.find(
-      (e) => e.event === "message.started" && "botId" in e && (e as { botId: string }).botId === botId,
+      (e) =>
+        e.event === "message.started" && "botId" in e && (e as { botId: string }).botId === botId,
     );
     expect(started).toBeDefined();
 
     // message.completed must have arrived.
     const completed = events.find(
-      (e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
+      (e) =>
+        e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
     );
     expect(completed).toBeDefined();
 
@@ -164,7 +163,10 @@ describe("bot intro turn", () => {
     // Wait for intro generation to complete.
     await waitFor(() =>
       events.some(
-        (e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
+        (e) =>
+          e.event === "message.completed" &&
+          "botId" in e &&
+          (e as { botId: string }).botId === botId,
       ),
     );
 
@@ -203,7 +205,8 @@ describe("bot intro turn", () => {
 
     // No message.* events for this bot.
     const messageStarted = events.filter(
-      (e) => e.event === "message.started" && "botId" in e && (e as { botId: string }).botId === botId,
+      (e) =>
+        e.event === "message.started" && "botId" in e && (e as { botId: string }).botId === botId,
     );
     expect(messageStarted).toHaveLength(0);
 
@@ -253,14 +256,18 @@ describe("bot intro turn", () => {
     // Verify that message.completed has NOT yet arrived at the moment create returned.
     // (bots.create must not block until generation finishes.)
     const completedAtCreate = events.some(
-      (e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
+      (e) =>
+        e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
     );
     expect(completedAtCreate).toBe(false);
 
     // Wait for the generation to eventually finish.
     await waitFor(() => {
       const done = events.some(
-        (e) => e.event === "message.completed" && "botId" in e && (e as { botId: string }).botId === botId,
+        (e) =>
+          e.event === "message.completed" &&
+          "botId" in e &&
+          (e as { botId: string }).botId === botId,
       );
       if (done && generationCompletedAt === 0) generationCompletedAt = Date.now();
       return done;

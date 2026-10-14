@@ -35,6 +35,8 @@ Hydra/
 
 ## Commands
 
+For full validation, follow `VALIDATING.md`.
+
 ### Daemon
 
 All commands run from `daemon/`.
@@ -48,6 +50,15 @@ npm run typecheck
 
 # Run tests (no network; uses pi-ai faux provider)
 npm test
+
+# Lint with oxlint (warnings denied)
+npm run lint
+
+# Format with oxfmt
+npm run format
+
+# Check formatting without writing
+npm run format:check
 
 # Build the bundled daemon binary
 npm run build
