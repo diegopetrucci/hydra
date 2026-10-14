@@ -1,0 +1,758 @@
+{
+  "sentry": [
+    {
+      "name": "find_projects",
+      "description": "Find projects in Sentry.\n\nUse this tool when you need to:\n- View projects in a Sentry organization\n- Find a project's slug to aid other tool requests\n- Search for specific projects by name or slug\n\nReturns up to 25 results per page. When hasMore is true, pass the returned nextCursor with the same filters and scope to fetch the next page.",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "query": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Search query to filter results by name or slug. Use this to narrow down results when there are many items."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cursor": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Pagination cursor from a previous call's nextCursor. Reuse it with the same filters and scope to fetch the next page."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "search_issues",
+      "description": "Search for grouped issues/problems in Sentry - returns a LIST of issues, NOT counts or aggregations.\n\nProvide `query` as natural language or Sentry issue search syntax. When an embedded agent is configured, it fixes query and sort before running while preserving explicit Sentry search syntax.\n\nReturns grouped issues with metadata like title, status, and user count.\n\nCommon Query Syntax:\n- is:unresolved / is:resolved / is:ignored / is:for_review / is:new / is:regressed / is:escalating\n- level:error / level:warning\n- firstSeen:-24h / lastSeen:-7d\n- assigned:me / assigned_or_suggested:me\n- release:latest\n- issue.category:feedback\n- issue.priority:high\n- environment:production\n- userCount:>100\n\nDO NOT USE FOR COUNTS/AGGREGATIONS → use search_errors\nDO NOT USE FOR individual events with timestamps → use search_errors, search_logs, or search_traces\nDO NOT USE FOR details about a specific issue → use get_sentry_resource\n\n<examples>\nsearch_issues(organizationSlug='my-org', query='critical bugs from last week')\nsearch_issues(organizationSlug='my-org', query='is:unresolved is:unassigned', sort='freq')\nsearch_issues(organizationSlug='my-org', query='level:error firstSeen:-24h', projectSlugOrId='my-project')\n</examples>\n\n<hints>\n- If the user passes a parameter in the form of name/otherName, it's likely in the format of <organizationSlug>/<projectSlugOrId>.\n- Parse org/project notation directly without calling find_organizations or find_projects.\n- The projectSlugOrId parameter accepts both project slugs (e.g., 'my-project') and numeric IDs (e.g., '123456').\n</hints>",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "query": {
+            "default": "is:unresolved",
+            "description": "Natural language or Sentry issue search query syntax.",
+            "type": "string"
+          },
+          "sort": {
+            "default": "date",
+            "description": "Sort order: date (last seen), freq (frequency), new (first seen), user (user count), recommended (Sentry's prioritized ranking)",
+            "type": "string",
+            "enum": ["date", "freq", "new", "user", "recommended"]
+          },
+          "projectSlugOrId": {
+            "default": null,
+            "description": "The project's slug or numeric ID (optional)",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "default": 10,
+            "description": "Maximum number of issues to return (1-100)",
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "period": {
+            "default": "30d",
+            "description": "Time window for issue search results. Controls which issues are returned based on when they had activity. Default 30d is a balance between coverage and query performance; use 24h for very recent issues or 90d for broader historical searches.",
+            "type": "string",
+            "enum": ["24h", "7d", "14d", "30d", "90d"]
+          },
+          "includeExplanation": {
+            "default": false,
+            "description": "Include explanation of how the query was translated or repaired",
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "name": "update_issue",
+      "description": "Update a Sentry issue's status or assignment.\n\nUse this to resolve, reopen, assign, unassign, or ignore an issue.\n\n<examples>\n```\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', status='resolved')\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', assignedTo='user:123456')\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', assignedTo=null)\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', status='ignored')\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', status='ignored', ignoreMode='forever')\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', status='ignored', ignoreMode='untilOccurrenceCount', ignoreCount=100, ignoreWindowMinutes=60)\nupdate_issue(organizationSlug='my-org', issueId='PROJECT-123', status='ignored', reason='Ignoring because this is expected noise from the staging deploy')\n```\n</examples>\n\n<hints>\n- Provide `issueUrl` or `organizationSlug` + `issueId`.\n- At least one of `status` or `assignedTo` is required.\n- Omit `assignedTo` to leave assignment unchanged. Pass `null` to unassign; otherwise use `user:ID` or `team:ID_OR_SLUG`.\n- Use `execute_sentry_tool(name='whoami', arguments={})` to find your user ID for self-assignment.\n- Status values: `resolved`, `resolvedInNextRelease`, `unresolved`, `ignored`.\n- `status='ignored'` defaults to `ignoreMode='untilEscalating'`.\n- Ignore modes: `untilEscalating`, `forever`, `forDuration`, `untilOccurrenceCount`, `untilUserCount`.\n- Matching ignore inputs are `ignoreDurationMinutes`, `ignoreCount` + optional `ignoreWindowMinutes`, or `ignoreUserCount` + optional `ignoreUserWindowMinutes`.\n- To switch an already ignored issue between `untilEscalating`, `forever`, and condition-based ignore modes, first set `status='unresolved'`, then ignore it again with the new rule.\n- `reason` is optional. When provided, it will be posted as a comment on the issue's activity feed explaining why the action was taken.\n</hints>",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "description": "The Issue ID. e.g. `PROJECT-1Z43`"
+          },
+          "issueUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL of the issue. e.g. https://my-organization.sentry.io/issues/PROJECT-1Z43"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["resolved", "resolvedInNextRelease", "unresolved", "ignored"],
+            "description": "The new status for the issue. Valid values are 'resolved', 'resolvedInNextRelease', 'unresolved', and 'ignored'."
+          },
+          "assignedTo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The assignee in format 'user:ID' or 'team:ID_OR_SLUG' where ID is numeric. Pass null to unassign the issue. Example: 'user:123456', 'team:789', or 'team:my-team-slug'. Use `execute_sentry_tool(name='whoami', arguments={})` to find your user ID."
+          },
+          "ignoreMode": {
+            "type": "string",
+            "enum": [
+              "untilEscalating",
+              "forever",
+              "forDuration",
+              "untilOccurrenceCount",
+              "untilUserCount"
+            ],
+            "description": "How ignored issues should behave. Use 'untilEscalating' to match the Sentry UI default, 'forever' for a permanent ignore, 'forDuration' with ignoreDurationMinutes, 'untilOccurrenceCount' with ignoreCount and optional ignoreWindowMinutes, or 'untilUserCount' with ignoreUserCount and optional ignoreUserWindowMinutes."
+          },
+          "ignoreDurationMinutes": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How many minutes to ignore the issue when ignoreMode is 'forDuration'."
+          },
+          "ignoreCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How many times the issue must occur before it stops being ignored when ignoreMode is 'untilOccurrenceCount'."
+          },
+          "ignoreWindowMinutes": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 10080,
+            "description": "Optional time window in minutes for ignoreCount. If omitted, Sentry counts all future occurrences."
+          },
+          "ignoreUserCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How many users must be affected before the issue stops being ignored when ignoreMode is 'untilUserCount'."
+          },
+          "ignoreUserWindowMinutes": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 10080,
+            "description": "Optional time window in minutes for ignoreUserCount. If omitted, Sentry counts all future affected users."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional reason for taking this action. When provided, it will be posted as a comment on the issue's activity feed."
+          }
+        }
+      }
+    },
+    {
+      "name": "get_sentry_resource",
+      "description": "Fetch a Sentry resource by URL, or by resourceType plus resourceId.\nPass a Sentry URL directly when possible; the resource type is auto-detected.\n\nSupports issues, events, traces, spans, agent conversations, replays, monitors, preprod snapshots, and snapshot images.\nTrace lookups return a condensed overview by default.\n\nAgent Conversations: A conversation is a set of spans sharing the same gen_ai.conversation.id. Use resourceType='ai_conversation' with a conversation ID, or pass a Sentry conversation URL, to fetch the transcript/details. To discover or list conversations, use search_agent_conversations. Conversations are NOT issues — do not use search_issues for conversation queries.\n\nFor preprod snapshot URLs (matching 'sentry.io/preprod/snapshots/'):\n- Without ?selectedSnapshot=: returns the snapshot diff summary (changed, added, removed images)\n- With ?selectedSnapshot=<image_file_name>: returns the image preview and metadata. Use the Sentry tool `get_snapshot_image` for full-resolution image bytes.\n\nResource IDs:\n- monitor: <monitorSlug>\n- snapshot: <snapshotId>\n\n<examples>\nget_sentry_resource(url='https://sentry.io/issues/PROJECT-123/')\nget_sentry_resource(resourceType='issue', organizationSlug='my-org', resourceId='PROJECT-123')\nget_sentry_resource(resourceType='ai_conversation', organizationSlug='my-org', resourceId='conversation-123')\nget_sentry_resource(url='https://sentry.sentry.io/preprod/snapshots/123/')\nget_sentry_resource(url='https://sentry.sentry.io/preprod/snapshots/123/?selectedSnapshot=login_screen.png')\n</examples>",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "url": {
+            "description": "Sentry URL. The resource type is auto-detected from the URL pattern.",
+            "type": "string",
+            "format": "uri"
+          },
+          "resourceType": {
+            "description": "Resource type. With a URL, can override a span-focused trace URL with `trace`. Use `monitor` with a monitor slug only when inspect monitor tools are available or `snapshot` with a snapshot artifact ID.",
+            "type": "string",
+            "enum": ["issue", "event", "trace", "ai_conversation", "replay", "monitor", "snapshot"]
+          },
+          "resourceId": {
+            "description": "Resource identifier: issue shortId (e.g., 'PROJECT-123'), event ID, trace ID, agent conversation ID, replay ID, monitor slug when inspect monitor tools are available, or snapshot artifact ID. Required when not using a URL.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "analyze_issue_with_seer",
+      "description": "Use Seer to analyze production errors and get detailed root cause analysis with specific code fixes.\n\nUse this tool when:\n- The user explicitly asks for root cause analysis, Seer analysis, or help fixing/debugging an issue\n- You are unable to accurately determine the root cause from the issue details alone\n\nDo NOT call this tool as an automatic follow-up to get_sentry_resource.\n\nWhat this tool provides:\n- Root cause analysis with code-level explanations\n- Specific file locations and line numbers where errors occur\n- Concrete code fixes you can apply\n- Step-by-step implementation guidance\n\nThis tool automatically:\n1. Checks if analysis already exists (instant results)\n2. Starts new AI analysis if needed (~2-5 minutes)\n3. Returns complete fix recommendations\n\n<examples>\n### User: \"Run Seer on this issue\"\n\n```\nanalyze_issue_with_seer(issueUrl='https://my-org.sentry.io/issues/PROJECT-1Z43')\n```\n\n### User: \"Analyze this issue and suggest a fix\"\n\n```\nanalyze_issue_with_seer(organizationSlug='my-organization', issueId='ERROR-456')\n```\n</examples>\n\n<hints>\n- Only use when the user explicitly requests analysis or you cannot determine the root cause from issue details alone\n- Seer Autofix does not support metric alert issues (issueCategory: metric); use get_issue_details and search_metrics or search_traces instead\n- If the user provides an issueUrl, extract it and use that parameter alone\n- The analysis includes actual code snippets and fixes, not just error descriptions\n- Results are cached - subsequent calls return instantly\n</hints>",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "description": "The Issue ID. e.g. `PROJECT-1Z43`"
+          },
+          "issueUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL of the issue. e.g. https://my-organization.sentry.io/issues/PROJECT-1Z43"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "Optional custom instruction for the AI analysis"
+          }
+        }
+      }
+    }
+  ],
+  "notion": [
+    {
+      "name": "notion-search",
+      "description": "Search Notion and connected workspace sources available to you, such as Slack, Mail, and Calendar, with AI search. Use this tool for every content search: exact keywords, page titles, project names, and natural-language questions. Keywords are valid; a question is not required. Preserve distinctive names and identifiers. Prefer one topic per call, ideally under 50 words.\n\nStart with {\"query\":\"...\"} and omit optional parameters unless needed. For user lookup, set query_type=\"user\" and provide a name or email, and omit content filters and sort. Filters, sort other than relevance, and filter-only browsing return Notion-only keyword results with supported constraints applied; omit them to search Notion and connected sources together. Business or Enterprise is required for filters.edited_by_user_ids, filters.last_edited_date_range, filters.title_only=true, filters.content_status, more than one distinct teamspace across teamspace_id and filters.teamspace_ids, and sort other than relevance. On other plans, those options are dropped with a notice in the result, and results may be broader. Keep filters nested inside \"filters\". Use page_size, not limit.\n\n<example description=\"Find a page by title\">\n{\"query\":\"Q3 roadmap\"}\n</example>\n<example description=\"Find an exact identifier\">\n{\"query\":\"ACME-123\"}\n</example>\n<example description=\"Answer a question\">\n{\"query\":\"Why did we delay the launch?\"}\n</example>\n<example description=\"Browse Notion pages created in a date range\">\n{\"query\":\"\",\"filters\":{\"created_date_range\":{\"start_date\":\"2026-07-01\",\"end_date\":\"2026-08-01\"}}}\n</example>",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Short, specific keywords for Notion content search. For user search, enter a name or email address. Provide a non-empty query unless intentionally browsing with filters or a non-relevance sort."
+          },
+          "query_type": {
+            "description": "Specify type of the query as either \"internal\" or \"user\". Always include this input if performing \"user\" search.",
+            "type": "string",
+            "enum": ["internal", "user"]
+          },
+          "data_source_url": {
+            "description": "Optionally restrict keyword search to a data source URL returned in a <data-source> tag.",
+            "type": "string"
+          },
+          "page_url": {
+            "description": "Optionally restrict keyword search to a page and its descendants. Accepts a Notion page URL or ID.",
+            "type": "string"
+          },
+          "teamspace_id": {
+            "description": "Optionally, provide the ID of a teamspace to restrict search results to. This will perform a search over content within the specified teamspace only. Accepts the teamspace ID (UUIDv4) with or without dashes.",
+            "type": "string"
+          },
+          "filters": {
+            "description": "Optional exact filters for Notion workspace search. Omit unless required by the request. Keep filter fields nested here; do not send them at the top level. Some filters require Business access.",
+            "type": "object",
+            "properties": {
+              "created_date_range": {
+                "description": "Optional filter to only produce search results created within the specified date range.",
+                "type": "object",
+                "properties": {
+                  "start_date": {
+                    "description": "The start date of the date range as an ISO 8601 date string, if any.",
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "end_date": {
+                    "description": "The end date of the date range as an ISO 8601 date string, if any.",
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "created_by_user_ids": {
+                "description": "Optional filter to only produce search results created by the Notion users that have the specified user IDs. Use \"me\" for the connected user.",
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "edited_by_user_ids": {
+                "description": "Optional filter to only produce search results edited by the Notion users that have the specified user IDs. Use \"me\" for the connected user. Available on the Business plan.",
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "last_edited_date_range": {
+                "description": "Optional filter to only produce search results last edited within the specified date range. Available on the Business plan.",
+                "type": "object",
+                "properties": {
+                  "start_date": {
+                    "description": "The start date of the date range as an ISO 8601 date string, if any.",
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "end_date": {
+                    "description": "The end date of the date range as an ISO 8601 date string, if any.",
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "teamspace_ids": {
+                "description": "Optional filter to only produce search results inside one of the specified teamspaces. Selecting more than one teamspace is available on the Business plan; use teamspace_id for one teamspace on other plans.",
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "title_only": {
+                "description": "When true, match the query only against page and database titles instead of page content. Available on the Business plan.",
+                "type": "boolean"
+              },
+              "content_status": {
+                "description": "Which pages to include by status. Omit for the default live pages. Supplying this field, even with the default value, requires Business access.",
+                "type": "string",
+                "enum": [
+                  "all_with_archived",
+                  "all_without_archived",
+                  "verified_only",
+                  "archived_only"
+                ]
+              }
+            },
+            "additionalProperties": {}
+          },
+          "sort": {
+            "description": "Result ordering for Notion workspace search. Omit for the default \"relevance\" ordering. \"last_edited\" and \"created\" require Business access.",
+            "type": "string",
+            "enum": ["relevance", "last_edited", "created"]
+          },
+          "page_size": {
+            "description": "Maximum number of results to return (default 10). Lower values reduce response size.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "max_highlight_length": {
+            "description": "Maximum character length for result highlights (default 200). Set to 0 to omit highlights entirely.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": {}
+      }
+    },
+    {
+      "name": "notion-create-pages",
+      "description": "Creates one or more Notion pages with the specified properties and content.\n\n## Core rules\n\n**IMPORTANT**: Before writing page content, read the MCP resource `notion://docs/enhanced-markdown-spec` through your MCP client's resource-reading interface, or call the Notion \"fetch\" tool with this URI if your client does not support reading MCP resources. Do NOT pass this URI to any other URL-fetching tool. Do NOT guess or hallucinate Markdown syntax. Do not put the page title at the top of content; set it in properties. By default, use native Notion mentions for references you add to existing Notion pages, databases, data sources, people, and dates. Use Markdown links only for external URLs or when the user requests a plain link. For a person, use a user mention with their user URL, found with search using query_type \"user\"; do not write \"@Name\" as plain text. For a specific date or time, such as a due date or meeting time, use a date mention. The Markdown specification gives the mention syntax.\n\nUse a named destination as parent. Otherwise use \"creation_mode\": \"draft\" for a durable private page. Do not combine draft mode with parent, or move or share it without direction.\n\nFor a database destination, ALWAYS fetch first. Use its collection:// URL as data_source_id, exact property names, and title property. Never put a database ID in page_id. Outside a database, the only allowed property is the required \"title\".\n\nFor reusable instructions, set \"is_skill\": true. Before creating a skill, read the MCP resource `notion://docs/skills` through your MCP client's resource-reading interface. If your client does not support reading MCP resources, call the Notion \"fetch\" tool with this URI instead. Do NOT pass this URI to any other URL-fetching tool. Do not mark ordinary pages or drafts as skills.",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "pages": {
+            "description": "The pages to create.",
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "properties": {
+                  "description": "The properties of the new page, which is a JSON map of property names to SQLite values.\nFor pages in a database, use the SQLite schema definition shown in <database>.\nFor pages outside of a database, the only allowed property is \"title\", which is the title of the page and is automatically shown at the top of the page as a large heading.\n**IMPORTANT**: Some property types require specific formats:\n- Date properties: Split into \"date:{property}:start\", \"date:{property}:end\" (optional), and \"date:{property}:is_datetime\" (0 or 1)\n- Place properties: Split into \"place:{property}:name\", \"place:{property}:address\", \"place:{property}:latitude\", \"place:{property}:longitude\", and \"place:{property}:google_place_id\" (optional)\n- Number properties: Use JavaScript numbers (not strings)\n- Checkbox properties: Use \"__YES__\" for checked, \"__NO__\" for unchecked\n- Relation properties: Use an array of related page URLs or page IDs, e.g. [\"https://www.notion.so/26ab1f9f4c5f80b18d3bd10a6b1d2f4e\", \"26ab1f9f-4c5f-80b1-8d3b-d10a6b1d2f4e\"]\n- Person properties: Use an array of user IDs, user or agent URLs, or group references copied from fetch output (\"space_permission_group-<UUID>\"). Bare group UUIDs are also supported.\n- Files properties: Use a JSON array of file IDs, Notion Folder URLs, and/or <folder> tags copied from fetch output. Folders are stored as native Folder references, not ordinary links.\n\n\n**Special property naming**: Properties named \"id\" or \"url\" (case insensitive) must be prefixed with \"userDefined:\" (e.g., \"userDefined:URL\", \"userDefined:id\")",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "content": {
+                  "description": "The content of the new page, using Notion Markdown. For people and dates, use user and date mentions rather than plain text; notion://docs/enhanced-markdown-spec gives the syntax.",
+                  "type": "string"
+                },
+                "template_id": {
+                  "description": "The ID of a template to apply to this page. When specified, do not provide 'content' as the template will provide it. Properties can still be set alongside the template. Get template IDs from the <templates> section in the fetch tool results. Template application is asynchronous: the page starts blank and content appears shortly after.",
+                  "type": "string"
+                },
+                "icon": {
+                  "description": "An emoji character (e.g. \"🚀\"), a custom emoji by name (e.g. \":rocket_ship:\"), a Notion icon identifier as returned by fetch (e.g. \"icons/pizza_blue\"), or an external image URL. Use \"none\" to explicitly set no icon. Omit to leave unchanged. Keep the title free of a duplicate leading emoji because the icon renders separately.",
+                  "type": "string"
+                },
+                "cover": {
+                  "description": "An external image URL for the page cover. Use \"none\" to explicitly set no cover. Omit to leave unchanged.",
+                  "type": "string"
+                },
+                "is_skill": {
+                  "description": "Set to true only when the user asks for reusable instructions or a repeatable workflow. Do not mark ordinary reference pages, one-time documents, or drafts as skills. Before creating a skill, read the MCP resource `notion://docs/skills` through your MCP client's resource-reading interface. If your client does not support reading MCP resources, call the Notion \"fetch\" tool with this URI instead. Do NOT pass this URI to any other URL-fetching tool. False has the same effect as omitting the field.",
+                  "type": "boolean"
+                },
+                "preserve_internal_links": {
+                  "description": "Preserve internal Markdown links instead of converting them to native mentions.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "creation_mode": {
+            "description": "If the user explicitly names a private or shared destination, omit \"creation_mode\" and use that parent. Otherwise, use \"draft\" when the user clearly wants a durable page but has not named a destination. Prefer this explicit draft mode over omitting the parent. Draft mode is server-enforced: it creates a private workspace-level page and cannot be combined with \"parent\". Create it without first asking where it should live. After creation, tell the user it is private and offer to move it once they name a destination.",
+            "type": "string",
+            "enum": ["draft"]
+          },
+          "parent": {
+            "description": "All pages in one call share this parent. Pass \"memory\" to save a personal memory; see notion://docs/memory. Otherwise use a page (page_id), database page (database_id), data source (data_source_id), or teamspace root (teamspace_id, from get_teams). Teamspace roots require a user-backed connection and permission to add top-level pages. A database_id cannot be used when the database has more than one data source; fetch it and use the right collection:// URL as data_source_id. If omitted, pages are private at the workspace level. When no destination is named, prefer explicit \"creation_mode\": \"draft\" over omitting the parent.",
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["memory"],
+                "description": "Always `memory`"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string",
+                    "description": "The ID of the parent page (with or without dashes), for example, 195de9221179449fab8075a27c979105"
+                  },
+                  "type": {
+                    "description": "Always `page_id`",
+                    "type": "string",
+                    "enum": ["page_id"]
+                  }
+                },
+                "required": ["page_id"],
+                "additionalProperties": {}
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "database_id": {
+                    "type": "string",
+                    "description": "The ID of the parent database (with or without dashes), for example, 195de9221179449fab8075a27c979105"
+                  },
+                  "type": {
+                    "description": "Always `database_id`",
+                    "type": "string",
+                    "enum": ["database_id"]
+                  }
+                },
+                "required": ["database_id"],
+                "additionalProperties": {}
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data_source_id": {
+                    "type": "string",
+                    "description": "The ID of the parent data source (collection), with or without dashes. For example, f336d0bc-b841-465b-8045-024475c079dd"
+                  },
+                  "type": {
+                    "description": "Always `data_source_id`",
+                    "type": "string",
+                    "enum": ["data_source_id"]
+                  }
+                },
+                "required": ["data_source_id"],
+                "additionalProperties": {}
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "teamspace_id": {
+                    "type": "string",
+                    "description": "The ID of the teamspace in which to create top-level pages (with or without dashes)."
+                  }
+                },
+                "required": ["teamspace_id"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "allow_async": {
+            "description": "Default to true for page creation. Set to false only when the next step needs the created pages immediately, or when async execution rejects the request as too large. When this create operation is accepted for background execution, it returns an async_task result. Use get_async_task to wait for a succeeded status before taking a dependent action on the pages. For pages created with template_id, a succeeded status does not mean template content is ready; fetch and retry until it is ready before changing or relying on that content. If omitted or false, the tool keeps the existing synchronous result shape.",
+            "type": "boolean"
+          }
+        },
+        "required": ["pages"],
+        "additionalProperties": {}
+      }
+    },
+    {
+      "name": "notion-fetch",
+      "description": "Retrieves details about a Notion entity (page, database, data source, or saved database view) by URL or ID.\n\nProvide a URL or ID in `id`. Make multiple calls for multiple entities.\n\nFor pages, use path, verification, edit time, and truncation metadata to assess the source. Treat recency as context, not proof. Report material uncertainty when sources conflict.\n\nPages use enhanced Markdown format. For the complete specification, read the MCP resource `notion://docs/enhanced-markdown-spec` through your MCP client's resource-reading interface, or call the Notion \"fetch\" tool with this URI if your client does not support reading MCP resources. Do NOT pass this URI to any other URL-fetching tool.\n\nPass a `notion://docs/*` URI as `id` to read that MCP documentation resource.\n\nDatabases return data sources in `<data-source url=\"collection://...\">` tags. Fetch the collection:// URL for its schema and use it with update_data_source or query_data_sources. Multi-source databases return more than one data source.\n\nSaved views return filters, sorts, and display settings. To query their rows, use query_data_sources with `mode: \"view\"`.\n\nA null cover or icon means none; an omitted one means unavailable, not absent. Keep a page's Markdown icon attribute for edit round trips. File URLs expire; re-fetch to refresh them. Uploaded media blocks use stable `notion-file-block://` sources; keep them when editing or copying Markdown. Get download URLs with get_file_download_urls, or set `include_file_urls` to true for a `references` map. Before relying on page content, check `truncated`, `unknown_block_count`, and `unknown_block_ids` for omitted subtrees.\n\nSet `include_discussions` to true for discussion counts, markers, previews, and `discussion://` URLs that correlate with get_comments.\n\nUse get_tool_access to check tool availability, parameter restrictions, and upgrade links for this connection.",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The ID or URL of the Notion page, database, or data source to fetch. Supports notion.so URLs, Notion Sites URLs (*.notion.site), raw UUIDs, and data source URLs (collection://...). Pass \"memory\" to fetch the connected user's About page and memory database in this workspace without creating them. Pass a notion://docs/* URI to read that documentation resource. Also accepts an explicit saved view URL (view://...) from a database response. If a database block ID returns a validation error, use the collection:// URL from that error. Example: <example>notion://docs/enhanced-markdown-spec</example>."
+          },
+          "include_transcript": {
+            "description": "Whether to include meeting note transcripts. Defaults to false. When true, full transcripts are included; when false, a placeholder with the meeting note URL is shown instead.",
+            "type": "boolean"
+          },
+          "include_discussions": {
+            "description": "Whether to include discussion/comment indicators in the page output. When true, adds a <page-discussions> summary with discussion count, preview snippets, and discussion:// URLs. Use with the get_comments tool to retrieve full discussion content. Defaults to false.",
+            "type": "boolean"
+          },
+          "include_file_urls": {
+            "description": "Whether to return signed download URLs for uploaded files. Defaults to false. When false, page Markdown cites uploaded files by stable notion-file-block:// references and the response has no references map; call get_file_download_urls with the references when you need those files' contents. When true, the response's references map gives the signed URL for each reference.",
+            "type": "boolean"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": {}
+      }
+    },
+    {
+      "name": "notion-update-page",
+      "description": "Update a Notion page's properties or content.\n\n## Core rules\n\n**IMPORTANT**: Before writing page content, read the MCP resource `notion://docs/enhanced-markdown-spec` through your MCP client's resource-reading interface, or call the Notion \"fetch\" tool with this URI if your client does not support reading MCP resources. Do NOT pass this URI to any other URL-fetching tool. Do NOT guess or hallucinate Markdown syntax. By default, use native Notion mentions for references you add to existing Notion pages, databases, data sources, people, and dates. Use Markdown links only for external URLs or when the user requests a plain link. For a person, use a user mention with their user URL, found with search using query_type \"user\"; do not write \"@Name\" as plain text. For a specific date or time, such as a due date or meeting time, use a date mention. The Markdown specification gives the mention syntax.\n\nBefore changing content, fetch unless already loaded. Match nearby headings, block types, nesting, list or table patterns, and prose style.\n\nMake the smallest edit. Use \"update_content\" for targeted search-and-replace and \"insert_content\" only to prepend or append. Avoid full-page \"replace_content\" when a targeted command is sufficient. Preserve unrelated wording, structure, order, and native references. Do not broadly rewrite unless asked.\n\nFor \"update_content\", use the smallest exact old_str that uniquely identifies the target. If the edit would remove material content the user did not identify, ask for confirmation first. After a multi-part or structural edit, fetch the page again and verify the requested content and nesting. Skip this extra read for a simple exact edit.\n\nFor \"replace_content\", preserve child pages and databases with their exact fetched tags. If validation reports that child content would be deleted, show the list and ask for confirmation. Never retry with \"allow_deleting_content\": true without confirmation. Report any \"warnings\" in the result.",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "page_id": {
+            "type": "string",
+            "description": "The ID of the page to update, with or without dashes."
+          },
+          "command": {
+            "type": "string",
+            "enum": [
+              "update_properties",
+              "update_content",
+              "replace_content",
+              "insert_content",
+              "apply_template",
+              "update_verification"
+            ],
+            "description": "The update command to execute."
+          },
+          "properties": {
+            "description": "Required for \"update_properties\" command. A JSON object that updates the page's properties.\nFor pages in a database, fetch the page or its data source first and use the exact property names and SQLite schema definition shown in <database>.\nFor pages outside of a database, the only allowed property is \"title\", which is the title of the page in inline markdown format.\nFor a Files property, an uploaded file can be provided as {\"type\":\"file_upload\",\"file_upload\":{\"id\":\"<file-upload-id>\"}} inside the property's array.\nUse null to remove a property's value.\n**IMPORTANT**: Some property types require specific formats:\n- Date properties: Split into \"date:{property}:start\", \"date:{property}:end\" (optional), and \"date:{property}:is_datetime\" (0 or 1)\n- Place properties: Split into \"place:{property}:name\", \"place:{property}:address\", \"place:{property}:latitude\", \"place:{property}:longitude\", and \"place:{property}:google_place_id\" (optional)\n- Number properties: Use JavaScript numbers (not strings)\n- Checkbox properties: Use \"__YES__\" for checked, \"__NO__\" for unchecked\n- Relation properties: Use an array of related page URLs or page IDs, e.g. [\"https://www.notion.so/26ab1f9f4c5f80b18d3bd10a6b1d2f4e\", \"26ab1f9f-4c5f-80b1-8d3b-d10a6b1d2f4e\"]\n- Person properties: Use an array of user IDs, user or agent URLs, or group references copied from fetch output (\"space_permission_group-<UUID>\"). Bare group UUIDs are also supported.\n- Files properties: Use a JSON array of file IDs, Notion Folder URLs, and/or <folder> tags copied from fetch output. Folders are stored as native Folder references, not ordinary links.\n\n\n**Special property naming**: Properties named \"id\" or \"url\" (case insensitive) must be prefixed with \"userDefined:\" (e.g., \"userDefined:URL\", \"userDefined:id\")",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "maxItems": 100,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": ["file_upload"],
+                            "description": "Always `file_upload`"
+                          },
+                          "file_upload": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "description": "ID of a file upload returned by create_file_upload or create_attachment."
+                              }
+                            },
+                            "required": ["id"],
+                            "additionalProperties": {},
+                            "description": "The uploaded file to attach to the Files property."
+                          }
+                        },
+                        "required": ["type", "file_upload"],
+                        "additionalProperties": {}
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "new_str": {
+            "description": "Required for \"replace_content\" command. The new content string to replace the entire page content with. Preserve child pages and databases with their exact fetched <page url=\"...\"> or <database url=\"...\"> tags. For people and dates, use user and date mentions rather than plain text; notion://docs/enhanced-markdown-spec gives the syntax.",
+            "type": "string"
+          },
+          "content": {
+            "description": "Required for \"insert_content\" command. The markdown content to insert into the page. For people and dates, use user and date mentions rather than plain text; notion://docs/enhanced-markdown-spec gives the syntax.",
+            "type": "string"
+          },
+          "content_updates": {
+            "description": "Required for \"update_content\" command. An array of search-and-replace operations, each with old_str (content to find) and new_str (replacement content).",
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old_str": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The existing content string to find and replace. Must exactly match the page content."
+                },
+                "new_str": {
+                  "type": "string",
+                  "description": "The new content string to replace old_str with. For people and dates, use user and date mentions rather than plain text; notion://docs/enhanced-markdown-spec gives the syntax."
+                },
+                "replace_all_matches": {
+                  "description": "If true, replaces all occurrences of old_str. If false (default), the operation fails if there are multiple matches.",
+                  "type": "boolean"
+                }
+              },
+              "required": ["old_str", "new_str"],
+              "additionalProperties": {}
+            }
+          },
+          "position": {
+            "description": "Optional for \"insert_content\" command. Use {\"type\":\"start\"} to prepend content or {\"type\":\"end\"} to append content. Omit to append.",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["start"],
+                    "description": "Insert the content at the start of the page."
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": {}
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["end"],
+                    "description": "Insert the content at the end of the page."
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": {}
+              }
+            ]
+          },
+          "allow_deleting_content": {
+            "description": "Optional for \"replace_content\" and \"update_content\" commands. Set to true to allow deletion of child pages and databases that are not referenced in the new content. If false or omitted, the operation will fail with an error listing the pages/databases that would be deleted. Show that list and ask the user for confirmation before retrying with true.",
+            "type": "boolean"
+          },
+          "template_id": {
+            "description": "Required for \"apply_template\" command. The ID of a template to apply to this page; any page ID can be used as a template. Template content is appended to any existing page content asynchronously.",
+            "type": "string"
+          },
+          "verification_status": {
+            "description": "Required for \"update_verification\" command. Set to \"verified\" to mark the page as verified, or \"unverified\" to remove verification. Requires a Business or Enterprise plan unless the page is in a wiki. When updating verification, the owner will be automatically set to the authenticated actor.",
+            "type": "string",
+            "enum": ["verified", "unverified"]
+          },
+          "verification_expiry_days": {
+            "description": "Optional for \"update_verification\" command when verification_status is \"verified\". Number of days until verification expires (e.g. 7, 30, 90). Omit for indefinite verification.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "icon": {
+            "description": "An emoji character (e.g. \"🚀\"), a custom emoji by name (e.g. \":rocket_ship:\"), a Notion icon identifier as returned by fetch (e.g. \"icons/pizza_blue\"), or an external image URL. Use \"none\" to remove the icon. Omit to leave unchanged. Can be set alongside any command. Keep the title free of a duplicate leading emoji because the icon renders separately.",
+            "type": "string"
+          },
+          "cover": {
+            "description": "An external image URL for the page cover. Use \"none\" to remove the cover. Omit to leave unchanged. Can be set alongside any command.",
+            "type": "string"
+          },
+          "is_skill": {
+            "description": "Set to true to mark this page as a skill, or false to remove the skill designation. Can be set alongside any command. To change only skill status, use \"update_properties\" and omit \"properties\".",
+            "type": "boolean"
+          },
+          "allow_async": {
+            "description": "Default to true for page updates. Set to false only when the next step needs the updated page immediately, or when async execution rejects the request as too large. When this update operation is accepted for background execution, it returns an async_task result. Use get_async_task to wait for a succeeded status before taking a dependent action on the page. For apply_template, a succeeded status does not mean template content is ready; fetch and retry until it is ready before changing or relying on that content. If omitted or false, the tool waits for a synchronous result when possible, but may still return a pollable async_task response if queued execution exceeds the synchronous wait deadline.",
+            "type": "boolean"
+          }
+        },
+        "required": ["page_id", "command"],
+        "additionalProperties": {}
+      }
+    },
+    {
+      "name": "notion-create-database",
+      "description": "Creates a new Notion database using SQL DDL syntax, or a canonical typed database for tasks, projects, or skills.\n\nProvide exactly one of:\n- schema: a CREATE TABLE statement. If no title property is provided, \"Name\" is auto-added.\n- database_type: one of tasks, projects, or skills. The database is created with the canonical required properties and typed metadata used by Notion.\n\n\nFor schema, use CREATE TABLE with double-quoted column names and single-quoted type options. If no title property is provided, \"Name\" is auto-added.\n\nProperty type syntax:\n- Simple: TITLE, RICH_TEXT, DATE, PEOPLE, CHECKBOX, URL, EMAIL, PHONE_NUMBER, STATUS, FILES\n- SELECT('opt':color, ...) / MULTI_SELECT('opt':color, ...)\n- NUMBER [FORMAT 'dollar'] / FORMULA('expression')\n- RELATION('ds') for a one-way relation\n- RELATION('ds', DUAL) for a two-way relation\n- RELATION('ds', DUAL 'Children') with a synced property name\n- RELATION('ds', DUAL 'Children' 'children') with a synced name and synced_id (for self-relations)\n- ROLLUP('rel_prop', 'target_prop', 'function')\n- UNIQUE_ID [PREFIX 'X'] / CREATED_TIME / LAST_EDITED_TIME\n- Any column: COMMENT 'description text' Colors: default, gray, brown, orange, yellow, green, blue, purple, pink, red.\n\n\nReturns Markdown with schema, SQLite definition, and data source ID in <data-source> tag for use with update_data_source and query_data_sources tools.",
+      "inputSchema": {
+        "type": "object",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "parent": {
+            "description": "The parent under which to create the new database. If omitted, the database will be created as a private page at the workspace level.",
+            "type": "object",
+            "properties": {
+              "page_id": {
+                "type": "string",
+                "description": "The ID of the parent page, with or without dashes."
+              },
+              "type": {
+                "description": "Always `page_id`",
+                "type": "string",
+                "enum": ["page_id"]
+              }
+            },
+            "required": ["page_id"],
+            "additionalProperties": {}
+          },
+          "title": {
+            "description": "The title of the new database.",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description of the new database.",
+            "type": "string"
+          },
+          "schema": {
+            "description": "SQL DDL CREATE TABLE statement defining the database schema. Cannot be combined with database_type. Column names must be double-quoted and type options use single quotes.\n\nProperty type syntax:\n- Simple: TITLE, RICH_TEXT, DATE, PEOPLE, CHECKBOX, URL, EMAIL, PHONE_NUMBER, STATUS, FILES\n- SELECT('opt':color, ...) / MULTI_SELECT('opt':color, ...)\n- NUMBER [FORMAT 'dollar'] / FORMULA('expression')\n- RELATION('ds') for a one-way relation\n- RELATION('ds', DUAL) for a two-way relation\n- RELATION('ds', DUAL 'Children') with a synced property name\n- RELATION('ds', DUAL 'Children' 'children') with a synced name and synced_id (for self-relations)\n- ROLLUP('rel_prop', 'target_prop', 'function')\n- UNIQUE_ID [PREFIX 'X'] / CREATED_TIME / LAST_EDITED_TIME\n- Any column: COMMENT 'description text' Colors: default, gray, brown, orange, yellow, green, blue, purple, pink, red.\n\n\nExamples:\n- Minimal: <example>CREATE TABLE (\"Name\" TITLE)</example>\n- With options: <example>CREATE TABLE (\"Name\" TITLE, \"Budget\" NUMBER FORMAT 'dollar', \"Tags\" MULTI_SELECT('eng':blue, 'design':pink), \"Task ID\" UNIQUE_ID PREFIX 'PRJ')</example>\n- Self-relations are a two-step flow: create the database, then use its data source ID with update_data_source to add paired properties such as RELATION('ds', DUAL 'Children' 'children').",
+            "type": "string"
+          },
+          "database_type": {
+            "description": "Create a canonical typed database with Notion's required properties and metadata. Supported types: tasks, projects, skills. Example: <example>tasks</example>. Use title \"Tasks\" when needed.",
+            "type": "string",
+            "enum": ["tasks", "projects", "skills"]
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  ]
+}
