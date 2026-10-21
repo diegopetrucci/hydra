@@ -271,6 +271,21 @@ struct AppFeatureTests {
 
     // MARK: - Restart flow
 
+    @Test("permanent runtime failure stays actionable after the event stream ends")
+    func permanentRuntimeFailureStaysVisible() async {
+        let store = TestStore(initialState: AppFeature.State(daemonStatus: .connected)) {
+            AppFeature()
+        }
+        let message = "Install a patched Node.js runtime and select it with HYDRA_NODE."
+        await store.send(.daemonEvent(.connectionChanged(.failed(message: message)))) {
+            $0.terminalDaemonError = message
+            $0.daemonStatus = .error(message)
+        }
+        await store.send(.helloFailed("Failed to write to daemon stdin"))
+        await store.send(.botsLoadFailed("Daemon is not connected"))
+        await store.send(.daemonStreamEnded)
+    }
+
     @Test("connectionChanged(.restarting) updates status")
     func connectionChangedRestartingUpdatesStatus() async {
         let store = TestStore(

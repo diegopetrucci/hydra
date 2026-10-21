@@ -73,7 +73,7 @@ describe("Node security runtime requirement", () => {
           },
         );
         expect(result.error).toBeUndefined();
-        expect(result.status).toBe(1);
+        expect(result.status).toBe(78);
         expect(result.stdout).toBe("");
         expect(result.stderr).toContain(`Unsupported Node.js ${version}`);
         expect(result.stderr).toContain(NODE_REQUIREMENT);

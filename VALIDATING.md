@@ -40,6 +40,11 @@ xcodebuild -workspace HydraWorkspace.xcworkspace -scheme Hydra -destination 'pla
 cd HydraPackage && swift test
 ```
 
+To select a patched runtime for these tests, prefix `swift test` with
+`HYDRA_NODE=/absolute/path/to/node` and `xcodebuild` with
+`TEST_RUNNER_HYDRA_NODE=/absolute/path/to/node`; Xcode does not forward the plain
+`HYDRA_NODE` environment variable to its test runners.
+
 Use a `/tmp` derived-data path. Do not run the UI tests: they launch the app with the real bundle ID.
 
 ## CI
@@ -78,7 +83,10 @@ continues using its old runtime until relaunched. `HYDRA_NODE` (environment or
 UserDefaults) can select a patched executable; the Homebrew fallback paths are
 unchanged. Verify that selected executable's `--version`, then run the smoke test
 above with that executable. An unsupported runtime writes an actionable error to
-stderr (the app's daemon log) and exits without accessing Hydra data.
+stderr (the app's daemon log) and exits with `78` (`EX_CONFIG`) without accessing
+Hydra data. The app treats this as a permanent startup failure: it stops retries
+and shows an actionable error that remains visible after pending requests fail
+and the event stream ends. Ordinary daemon crashes retain their restart behavior.
 
 The version floor assumes the official patched runtime and its default trust
 configuration. Operators using system/custom CA stores (`NODE_EXTRA_CA_CERTS`,

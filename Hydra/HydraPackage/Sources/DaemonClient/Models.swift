@@ -210,13 +210,15 @@ public enum BotActivity: Equatable, Sendable {
 
 // MARK: - ConnectionStatus
 
-/// Emitted by DaemonController when the daemon exits unexpectedly and the
-/// controller attempts to restart it.
+/// Emitted by DaemonController when the daemon exits unexpectedly, including
+/// permanent startup failures that must not restart.
 public enum ConnectionStatus: Equatable, Sendable {
     /// The daemon exited and a restart is in progress. `attempt` starts at 1.
     case restarting(attempt: Int)
     /// The daemon has been successfully restarted and is ready for requests.
     case reconnected
+    /// A permanent startup failure. The controller will not restart the daemon.
+    case failed(message: String)
 }
 
 // MARK: - AuthPromptOption

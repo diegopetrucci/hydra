@@ -16,6 +16,8 @@ public struct AppFeature {
         public var bots: IdentifiedArrayOf<Bot> = []
         public var selectedBotID: String?
         public var daemonStatus: DaemonStatus = .connecting
+        /// Retains a permanent startup failure across late request/stream failures.
+        public var terminalDaemonError: String?
         public var helloResult: HelloResult?
         public var unreadCounts: [String: Int] = [:]
         public var isAppActive: Bool = true
@@ -213,7 +215,7 @@ public struct AppFeature {
             return .none
 
         case .helloFailed(let message):
-            state.daemonStatus = .error(message)
+            state.daemonStatus = .error(state.terminalDaemonError ?? message)
             return .none
 
         case .botsLoaded(let bots):
@@ -222,7 +224,7 @@ public struct AppFeature {
             return .none
 
         case .botsLoadFailed(let message):
-            state.daemonStatus = .error(message)
+            state.daemonStatus = .error(state.terminalDaemonError ?? message)
             return .none
 
         case .authStatusReceived(let status):
@@ -282,7 +284,7 @@ public struct AppFeature {
             return reduceDaemonEvent(into: &state, event: event)
 
         case .daemonStreamEnded:
-            state.daemonStatus = .error("Daemon disconnected unexpectedly.")
+            state.daemonStatus = .error(state.terminalDaemonError ?? "Daemon disconnected unexpectedly.")
             return .none
 
         // MARK: Child: chat delegate
@@ -431,6 +433,11 @@ public struct AppFeature {
 
         case .connectionChanged(.restarting(let attempt)):
             state.daemonStatus = .restarting(attempt: attempt)
+            return .none
+
+        case .connectionChanged(.failed(let message)):
+            state.terminalDaemonError = message
+            state.daemonStatus = .error(message)
             return .none
 
         case .connectionChanged(.reconnected):

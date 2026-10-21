@@ -7,7 +7,8 @@ if (!isSupportedNode(process.versions.node)) {
     `[hydra-daemon] Unsupported Node.js ${process.versions.node}. Require ${NODE_REQUIREMENT}. ` +
       "Install a patched Node.js runtime and select it with HYDRA_NODE.\n",
   );
-  process.exitCode = 1;
+  // EX_CONFIG: the app must surface this permanent startup failure, not retry.
+  process.exitCode = 78;
 } else {
   await import("./daemon.js");
 }
