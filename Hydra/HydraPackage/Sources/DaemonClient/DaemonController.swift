@@ -65,6 +65,7 @@ actor DaemonController {
     private var restartAttempt: Int = 0
     private static let maxBackoffSeconds: Double = 30.0
     private var isConnected = false
+    private var terminalError: DaemonError?
 
     // MARK: - Environment overrides (for integration testing)
 
@@ -80,6 +81,7 @@ actor DaemonController {
     // MARK: - Public interface
 
     func connect() async throws {
+        if let terminalError { throw terminalError }
         guard !isConnected else { return }
         let (nodePath, daemonPath) = try resolvePaths()
         try spawnProcess(nodePath: nodePath, daemonPath: daemonPath)
@@ -243,9 +245,13 @@ actor DaemonController {
         // Detect unexpected termination using terminationHandler instead of
         // `process.waitUntilExit()` (which would block a cooperative thread
         // for the daemon's entire lifetime).
-        process.terminationHandler = { [weak self, nodePath, daemonPath] _ in
+        process.terminationHandler = { [weak self, nodePath, daemonPath] terminatedProcess in
+            let unsupportedRuntime = terminatedProcess.terminationReason == .exit
+                && terminatedProcess.terminationStatus == 78 // EX_CONFIG from the bootstrap
             Task { [weak self] in
-                await self?.handleUnexpectedExit(nodePath: nodePath, daemonPath: daemonPath)
+                await self?.handleUnexpectedExit(
+                    nodePath: nodePath, daemonPath: daemonPath, unsupportedRuntime: unsupportedRuntime
+                )
             }
         }
 
@@ -288,10 +294,16 @@ actor DaemonController {
 
     // MARK: - Private: process exit
 
-    private func handleUnexpectedExit(nodePath: String, daemonPath: String) async {
+    private func handleUnexpectedExit(nodePath: String, daemonPath: String, unsupportedRuntime: Bool) async {
         guard isConnected else { return } // intentional disconnect → skip restart
 
-        failAllPending(with: DaemonError(code: "daemon_exited", message: "Daemon exited unexpectedly"))
+        let error = unsupportedRuntime
+            ? DaemonError(
+                code: "unsupported_node",
+                message: "Node.js runtime is unsupported. Install a patched Node.js runtime, select it with HYDRA_NODE, and relaunch Hydra. See daemon.log for supported versions."
+            )
+            : DaemonError(code: "daemon_exited", message: "Daemon exited unexpectedly")
+        failAllPending(with: error)
 
         // Clear the stdin handle immediately so that any new requests arriving during
         // the backoff sleep throw immediately with "not_connected" rather than writing
@@ -300,6 +312,14 @@ actor DaemonController {
         stdinHandle = nil
         stdinHandleBox.update(nil)
         process = nil
+
+        if unsupportedRuntime {
+            terminalError = error
+            isConnected = false
+            eventContinuation.yield(.connectionChanged(.failed(message: error.message)))
+            eventContinuation.finish()
+            return
+        }
 
         restartAttempt += 1
         let attempt = restartAttempt
@@ -381,6 +401,7 @@ actor DaemonController {
     // MARK: - Private: request send
 
     private func sendRequest(type: String, params: [String: Any] = [:]) async throws -> Data {
+        if let terminalError { throw terminalError }
         // Guard: no continuation may be left unresumed if stdin is absent.
         guard let stdinHandle else {
             throw DaemonError(code: "not_connected", message: "Daemon is not connected")
@@ -434,6 +455,7 @@ actor DaemonController {
     }
 
     private func resolveNodePath() -> String {
+        if let v = overrideEnvironment["HYDRA_NODE"], !v.isEmpty { return v }
         if let v = ProcessInfo.processInfo.environment["HYDRA_NODE"], !v.isEmpty { return v }
         if let v = UserDefaults.standard.string(forKey: "HYDRA_NODE"), !v.isEmpty { return v }
         let candidates = ["/opt/homebrew/bin/node", "/usr/local/bin/node"]
@@ -441,6 +463,7 @@ actor DaemonController {
     }
 
     private func resolveDaemonPath() -> String {
+        if let v = overrideEnvironment["HYDRA_DAEMON"], !v.isEmpty { return v }
         if let v = ProcessInfo.processInfo.environment["HYDRA_DAEMON"], !v.isEmpty { return v }
         // #filePath: …/hydra/Hydra/HydraPackage/Sources/DaemonClient/DaemonController.swift
         // 5 deletions: filename → DaemonClient/ → Sources/ → HydraPackage/ → Hydra/ → repo root

@@ -4,10 +4,10 @@
   "description": "Hydra local daemon – pi-durable harness with JSON-lines protocol",
   "type": "module",
   "engines": {
-    "node": ">=22.19"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outfile=dist/daemon.mjs --external:node:* --external:undici --external:linkedom --external:turndown --external:@mozilla/readability --external:defuddle",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outfile=dist/daemon.mjs --external:./daemon.js && esbuild src/daemon.ts --bundle --platform=node --format=esm --outfile=dist/daemon.js --external:node:* --external:undici --external:linkedom --external:turndown --external:@mozilla/readability --external:defuddle",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "oxlint --deny-warnings src test vitest.config.ts",

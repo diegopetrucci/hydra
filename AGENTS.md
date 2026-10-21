@@ -42,14 +42,18 @@ For full validation, follow `VALIDATING.md`.
 All commands run from `daemon/`.
 
 ```bash
+# Requires Node ^22.23.4 || ^24.22.1 || ^26.12.1 (patched October 2026).
 # Install dependencies (once, or after package.json changes)
 npm ci
 
 # Type-check
 npm run typecheck
 
+# Build before tests (runtime checks exercise the built bootstrap)
+npm run build
+
 # Run tests (no network; uses pi-ai faux provider)
-npm test
+PI_CODING_AGENT_DIR="$(mktemp -d)" npm test
 
 # Lint with oxlint (warnings denied)
 npm run lint
@@ -62,7 +66,7 @@ npm run format:check
 
 # Build the bundled daemon binary
 npm run build
-# → dist/daemon.mjs
+# → dist/daemon.mjs plus the required sibling daemon.js implementation
 
 # Run the daemon (reads JSON-lines on stdin, writes JSON-lines on stdout)
 # Data dir defaults to ~/Library/Application Support/Hydra/
@@ -105,7 +109,8 @@ cd HydraPackage && swift test
 
 > **Signing note**: automatic signing (team L746MNXFYJ). No extra flags needed for local builds.
 > **Node path**: resolved from `HYDRA_NODE` env var, then UserDefaults key `HYDRA_NODE`,
-> then `/opt/homebrew/bin/node`, then `/usr/local/bin/node`.
+> then `/opt/homebrew/bin/node`, then `/usr/local/bin/node`. The daemon rejects
+> versions outside `^22.23.4 || ^24.22.1 || ^26.12.1`; see `VALIDATING.md`.
 > **Daemon path**: resolved from `HYDRA_DAEMON` env var, else derived from `#filePath` at
 > build time → `<repo>/daemon/dist/daemon.mjs`. Run `npm run build` in `daemon/` first.
 

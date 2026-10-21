@@ -4,6 +4,10 @@ Use this document as the repository reference for final validation.
 
 ## Daemon (`daemon/`)
 
+Use a patched Node.js runtime: `^22.23.4 || ^24.22.1 || ^26.12.1`.
+Other majors and prereleases are unsupported. Check `node --version` before
+installing or validating; npm's engine warning alone does not enforce this policy.
+
 Dependencies install from the lockfile with `npm ci`, never from a loose install. Full validation runs from `daemon/`:
 
 ```sh
@@ -11,8 +15,8 @@ npm ci
 npm run lint
 npm run format:check
 npm run typecheck
-npm test
 npm run build
+PI_CODING_AGENT_DIR="$(mktemp -d)" npm test
 printf '{"id":"1","type":"hello"}\n{"id":"2","type":"bots.list"}\n' | HYDRA_DATA_DIR=$(mktemp -d) node dist/daemon.mjs
 ```
 
@@ -36,11 +40,16 @@ xcodebuild -workspace HydraWorkspace.xcworkspace -scheme Hydra -destination 'pla
 cd HydraPackage && swift test
 ```
 
+To select a patched runtime for these tests, prefix `swift test` with
+`HYDRA_NODE=/absolute/path/to/node` and `xcodebuild` with
+`TEST_RUNNER_HYDRA_NODE=/absolute/path/to/node`; Xcode does not forward the plain
+`HYDRA_NODE` environment variable to its test runners.
+
 Use a `/tmp` derived-data path. Do not run the UI tests: they launch the app with the real bundle ID.
 
 ## CI
 
-`.github/workflows/ci.yml` runs the `oxlint` and `oxfmt` jobs on pull requests and pushes to `main`. After pushing, watch them until green.
+`.github/workflows/ci.yml` runs lint and formatting on Node 22.23.4, plus typecheck, build and tests on Node 22.23.4, 24.22.1 and 26.12.1, on pull requests and pushes to `main`. After pushing, watch them until green.
 
 ## Final validation guidance
 
@@ -49,3 +58,38 @@ The architect puts the exact ordered shell steps in the final-validation `tk` ti
 ## Manual checks
 
 See the "Manual checks" list in `AGENTS.md`.
+
+## October 2026 Node security update
+
+The [Node security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)
+fixes native Brotli decoding (CVE-2026-111497), TLS issues and the
+[eMudhra CA compromise](https://emudhra.we-have-a-problem.com/).
+Hydra's web tools and model/connector clients make HTTPS requests in the Node
+daemon. Updating npm packages or macOS alone does not patch that executable.
+The pinned pi packages remain at 1.2.0; no npm-only fix replaces the Node update.
+
+The dependency-free `src/main.ts` bootstrap rejects unsupported Node versions
+before loading `src/daemon.ts`. The build emits the bootstrap and implementation
+separately so dependency imports cannot be hoisted ahead of the check. Keep **all files in `daemon/dist/`**
+together when copying a build; `daemon.mjs` remains the app's entry point.
+Give web-tools tests an isolated `PI_CODING_AGENT_DIR`, as above.
+Build before testing: `test/runtime.test.ts` checks the actual bootstrap with
+a missing implementation bundle, unsafe version preloads, and an isolated protocol
+smoke test on the current real runtime. No exploit payloads are used.
+
+Operator follow-up: install a patched Node on the machine running Hydra, rebuild
+the daemon, then fully quit and relaunch Hydra when ready. The existing app process
+continues using its old runtime until relaunched. `HYDRA_NODE` (environment or
+UserDefaults) can select a patched executable; the Homebrew fallback paths are
+unchanged. Verify that selected executable's `--version`, then run the smoke test
+above with that executable. An unsupported runtime writes an actionable error to
+stderr (the app's daemon log) and exits with `78` (`EX_CONFIG`) without accessing
+Hydra data. The app treats this as a permanent startup failure: it stops retries
+and shows an actionable error that remains visible after pending requests fail
+and the event stream ends. Ordinary daemon crashes retain their restart behavior.
+
+The version floor assumes the official patched runtime and its default trust
+configuration. Operators using system/custom CA stores (`NODE_EXTRA_CA_CERTS`,
+`SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_OPTIONS`, or Node CA flags) must also update
+and verify those stores separately; do not disable TLS verification. Repository
+checks do not prove a running app or a custom trust store has been remediated.
